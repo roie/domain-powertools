@@ -189,21 +189,30 @@ export default function Sidebar() {
                         </div>
 
                         {/* Contains */}
-                        <div className="space-y-1">
-                            <label className="text-xs text-slate-400">Contains</label>
-                            <input type="text" value={filters.matchText} onChange={(e) => updateFilter('matchText', e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-sm focus:border-green-500 outline-none" placeholder="Include text..."/>
-                        </div>
+                        <input 
+                            type="text" 
+                            value={filters.matchText} 
+                            onChange={(e) => updateFilter('matchText', e.target.value)} 
+                            className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-sm focus:border-green-500 outline-none" 
+                            placeholder="Contains"
+                        />
 
                         {/* Starts / Ends */}
                         <div className="flex gap-2">
-                            <div className="w-1/2 space-y-1">
-                                <label className="text-xs text-slate-400">Starts With</label>
-                                <input type="text" value={filters.startsWith} onChange={(e) => updateFilter('startsWith', e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm focus:border-green-500 outline-none" placeholder="Start..."/>
-                            </div>
-                            <div className="w-1/2 space-y-1">
-                                <label className="text-xs text-slate-400">Ends With</label>
-                                <input type="text" value={filters.endsWith} onChange={(e) => updateFilter('endsWith', e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm focus:border-green-500 outline-none" placeholder="End..."/>
-                            </div>
+                            <input 
+                                type="text" 
+                                value={filters.startsWith} 
+                                onChange={(e) => updateFilter('startsWith', e.target.value)} 
+                                className="w-1/2 bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm focus:border-green-500 outline-none" 
+                                placeholder="Starts With"
+                            />
+                            <input 
+                                type="text" 
+                                value={filters.endsWith} 
+                                onChange={(e) => updateFilter('endsWith', e.target.value)} 
+                                className="w-1/2 bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm focus:border-green-500 outline-none" 
+                                placeholder="Ends With"
+                            />
                         </div>
 
                         {/* Hyphens & Numbers Dropdowns */}
