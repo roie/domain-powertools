@@ -7,5 +7,6 @@ export default defineConfig({
   },
   manifest: {
     name: 'Domain Powertools',
+    permissions: ['storage'],
   }
 });
