@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { FilterState, filterDomain } from './FilterEngine';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { FilterState, filterDomain, sortRows } from './FilterEngine';
 
 interface ColumnDef {
   label: string;
@@ -25,6 +25,7 @@ const DEFAULT_FILTERS: FilterState = {
 
 export default function Sidebar() {
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
+  const [sortConfig, setSortConfig] = useState<{ column: string, direction: 'asc' | 'desc' }>({ column: '', direction: 'asc' });
   const [hiddenColumns, setHiddenColumns] = useState<string[]>([]);
   const [visibleCount, setVisibleCount] = useState(0);
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -38,17 +39,27 @@ export default function Sidebar() {
   const [isAdvancedExpanded, setIsAdvancedExpanded] = useState(false);
   const [isColumnsExpanded, setIsColumnsExpanded] = useState(false);
 
+  // Store the original order of rows
+  const originalRowsRef = useRef<HTMLTableRowElement[]>([]);
+
   // Detect content on mount
   useEffect(() => {
+    const tbody = document.querySelector('table.base1 tbody');
+    if (tbody) {
+        originalRowsRef.current = Array.from(tbody.querySelectorAll('tr')) as HTMLTableRowElement[];
+    }
+
     // 1. Columns
     const headers = document.querySelectorAll('table.base1 thead th');
     const cols: ColumnDef[] = [];
     headers.forEach((th) => {
-      const headClass = Array.from(th.classList).find(c => c.startsWith('head_'));
-      if (!headClass || headClass === 'head_domain' || headClass === 'head_watchlist') return;
+      const classList = Array.from(th.classList);
+      const headClass = classList.find(c => c.startsWith('head_'));
+      if (!headClass || headClass === 'head_watchlist' || headClass === 'head_domain') return;
+
       const fieldClass = headClass.replace('head_', 'field_');
       const link = th.querySelector('a');
-      cols.push({
+      cols.push({ 
         label: link?.textContent?.trim() || th.textContent?.trim() || '?', 
         className: fieldClass, 
         tooltip: link?.getAttribute('title') || '' 
@@ -57,7 +68,7 @@ export default function Sidebar() {
     setColumns(cols);
 
     // 2. Statuses & TLDs
-    const rows = document.querySelectorAll('table.base1 tbody tr');
+    const rows = originalRowsRef.current;
     const statusSet = new Set<string>();
     const tldMap = new Map<string, number>();
 
@@ -92,24 +103,38 @@ export default function Sidebar() {
     return () => { document.body.style.marginRight = ''; };
   }, [isCollapsed]);
 
-  // Sync Filters
+  // Main Processing Effect (Filter + Sort)
   useEffect(() => {
-    const rows = document.querySelectorAll('table.base1 tbody tr');
+    const tbody = document.querySelector('table.base1 tbody');
+    if (!tbody || originalRowsRef.current.length === 0) return;
+
+    let rows = [...originalRowsRef.current];
     let count = 0;
+
+    // 1. Filter Visibility
     rows.forEach((row) => {
       const domainLink = row.querySelector('td:first-child a'); 
       const statusCell = row.querySelector('td.field_whois');
       if (!domainLink) return;
       const domainName = domainLink.getAttribute('title')?.trim() || domainLink.textContent?.trim() || '';
       const statusText = statusCell?.querySelector('a')?.textContent?.trim() || statusCell?.textContent?.trim() || '';
+      
       const isVisible = filterDomain(domainName, statusText, filters);
-      (row as HTMLElement).style.display = isVisible ? '' : 'none';
+      row.style.display = isVisible ? '' : 'none';
       if (isVisible) count++;
     });
     setVisibleCount(count);
-  }, [filters]);
 
-  // Sync Column Visibility
+    // 2. Sort Logic
+    if (sortConfig.column) {
+       rows = sortRows(rows, sortConfig.column, sortConfig.direction);
+    }
+    
+    // Always re-append to reflect either custom sort OR original order
+    rows.forEach(row => tbody.appendChild(row));
+
+  }, [filters, sortConfig]);
+  // Sync Column Visibility & Sort Reset
   useEffect(() => {
     const styleId = 'domain-powertools-col-styles';
     let styleTag = document.getElementById(styleId);
@@ -122,7 +147,12 @@ export default function Sidebar() {
        const headClass = fieldClass.replace('field_', 'head_');
        return `table.base1 th.${headClass}, table.base1 td.${fieldClass} { display: none !important; }`;
     }).join('\n');
-  }, [hiddenColumns]);
+
+    // Reset sort if the sorted column becomes hidden
+    if (sortConfig.column && sortConfig.column !== 'field_domain' && hiddenColumns.includes(sortConfig.column)) {
+        setSortConfig({ column: '', direction: 'asc' });
+    }
+  }, [hiddenColumns, sortConfig.column]);
 
   const updateFilter = (key: keyof FilterState, value: any) => {
     setFilters(prev => ({ ...prev, [key]: value }));
@@ -167,6 +197,33 @@ export default function Sidebar() {
 
         <div className="flex-1 overflow-y-auto p-4 space-y-6">
             
+            {/* Sorting Section */}
+            <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider px-1">Sort By</label>
+                <div className="flex gap-2">
+                    <select 
+                        value={sortConfig.column}
+                        onChange={(e) => setSortConfig(prev => ({ ...prev, column: e.target.value }))}
+                        className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm cursor-pointer outline-none focus:border-green-500 transition-colors"
+                    >
+                        <option value="">Default Order</option>
+                        <option value="field_domain">Domain</option>
+                        {columns.filter(col => !hiddenColumns.includes(col.className)).map(col => (
+                            <option key={col.className} value={col.className}>{col.label}</option>
+                        ))}
+                    </select>
+                    {sortConfig.column && (
+                        <button 
+                            onClick={() => setSortConfig(prev => ({ ...prev, direction: prev.direction === 'asc' ? 'desc' : 'asc' }))}
+                            className="bg-slate-800 border border-slate-700 rounded px-3 py-1 text-sm font-bold cursor-pointer hover:bg-slate-700 text-green-400"
+                            title={sortConfig.direction === 'asc' ? "Ascending" : "Descending"}
+                        >
+                            {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                        </button>
+                    )}
+                </div>
+            </div>
+
             {/* 1. Domain Name & Structure */}
             <section className="space-y-4">
                 <button 

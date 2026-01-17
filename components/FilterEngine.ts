@@ -95,3 +95,36 @@ export const filterDomain = (
 
   return true;
 };
+
+export const sortRows = (
+  rows: HTMLTableRowElement[], 
+  columnClass: string, 
+  direction: 'asc' | 'desc'
+): HTMLTableRowElement[] => {
+  if (!columnClass) return rows;
+
+  return [...rows].sort((a, b) => {
+    const cellA = a.querySelector(`td.${columnClass}`);
+    const cellB = b.querySelector(`td.${columnClass}`);
+
+    const valA = cellA?.textContent?.trim() || '';
+    const valB = cellB?.textContent?.trim() || '';
+
+    // Attempt to parse as number (remove commas/k/m if necessary, but simple parseFloat is usually enough for basic tables)
+    // Some columns might have "2.5k" or "1,000", simple parseFloat stops at commas often or handles them poorly if not cleaned.
+    // For EDN, usually just numbers or simple text.
+    const numA = parseFloat(valA.replace(/,/g, ''));
+    const numB = parseFloat(valB.replace(/,/g, ''));
+
+    const isNumA = !isNaN(numA);
+    const isNumB = !isNaN(numB);
+
+    if (isNumA && isNumB) {
+      return direction === 'asc' ? numA - numB : numB - numA;
+    }
+
+    return direction === 'asc' 
+      ? valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' })
+      : valB.localeCompare(valA, undefined, { numeric: true, sensitivity: 'base' });
+  });
+};
