@@ -35,11 +35,10 @@ export default function Sidebar() {
   
   const [copyFeedback, setCopyFeedback] = useState('');
   const [isNameExpanded, setIsNameExpanded] = useState(true);
-  const [isTldExpanded, setIsTldExpanded] = useState(true);
+  const [isTldExpanded, setIsTldExpanded] = useState(false);
   const [isAdvancedExpanded, setIsAdvancedExpanded] = useState(false);
   const [isColumnsExpanded, setIsColumnsExpanded] = useState(false);
-
-  // Store the original order of rows
+  
   const originalRowsRef = useRef<HTMLTableRowElement[]>([]);
 
   // Detect content on mount
@@ -49,12 +48,12 @@ export default function Sidebar() {
         originalRowsRef.current = Array.from(tbody.querySelectorAll('tr')) as HTMLTableRowElement[];
     }
 
-    // 1. Columns
     const headers = document.querySelectorAll('table.base1 thead th');
     const cols: ColumnDef[] = [];
     headers.forEach((th) => {
       const classList = Array.from(th.classList);
       const headClass = classList.find(c => c.startsWith('head_'));
+      
       if (!headClass || headClass === 'head_watchlist' || headClass === 'head_domain') return;
 
       const fieldClass = headClass.replace('head_', 'field_');
@@ -67,7 +66,6 @@ export default function Sidebar() {
     });
     setColumns(cols);
 
-    // 2. Statuses & TLDs
     const rows = originalRowsRef.current;
     const statusSet = new Set<string>();
     const tldMap = new Map<string, number>();
@@ -103,7 +101,7 @@ export default function Sidebar() {
     return () => { document.body.style.marginRight = ''; };
   }, [isCollapsed]);
 
-  // Main Processing Effect (Filter + Sort)
+  // Main Processing Effect
   useEffect(() => {
     const tbody = document.querySelector('table.base1 tbody');
     if (!tbody || originalRowsRef.current.length === 0) return;
@@ -111,7 +109,6 @@ export default function Sidebar() {
     let rows = [...originalRowsRef.current];
     let count = 0;
 
-    // 1. Filter Visibility
     rows.forEach((row) => {
       const domainLink = row.querySelector('td:first-child a'); 
       const statusCell = row.querySelector('td.field_whois');
@@ -125,16 +122,15 @@ export default function Sidebar() {
     });
     setVisibleCount(count);
 
-    // 2. Sort Logic
     if (sortConfig.column) {
        rows = sortRows(rows, sortConfig.column, sortConfig.direction);
     }
     
-    // Always re-append to reflect either custom sort OR original order
     rows.forEach(row => tbody.appendChild(row));
 
   }, [filters, sortConfig]);
-  // Sync Column Visibility & Sort Reset
+
+  // Sync Column Visibility & Highlight
   useEffect(() => {
     const styleId = 'domain-powertools-col-styles';
     let styleTag = document.getElementById(styleId);
@@ -143,12 +139,25 @@ export default function Sidebar() {
       styleTag.id = styleId;
       document.head.appendChild(styleTag);
     }
-    styleTag.textContent = hiddenColumns.map(fieldClass => {
+    
+    const hiddenRules = hiddenColumns.map(fieldClass => {
        const headClass = fieldClass.replace('field_', 'head_');
        return `table.base1 th.${headClass}, table.base1 td.${fieldClass} { display: none !important; }`;
     }).join('\n');
 
-    // Reset sort if the sorted column becomes hidden
+    let highlightRule = '';
+    if (sortConfig.column) {
+       highlightRule = `
+         table.base1 td.${sortConfig.column} {
+           background-color: rgba(71, 85, 105, 0.2) !important; 
+           border-left: 1px solid rgba(148, 163, 184, 0.2) !important;
+           border-right: 1px solid rgba(148, 163, 184, 0.2) !important;
+         }
+       `;
+    }
+
+    styleTag.textContent = hiddenRules + '\n' + highlightRule;
+
     if (sortConfig.column && sortConfig.column !== 'field_domain' && hiddenColumns.includes(sortConfig.column)) {
         setSortConfig({ column: '', direction: 'asc' });
     }
@@ -197,7 +206,6 @@ export default function Sidebar() {
 
         <div className="flex-1 overflow-y-auto p-4 space-y-6">
             
-            {/* Sorting Section */}
             <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider px-1">Sort By</label>
                 <div className="flex gap-2">
@@ -224,7 +232,6 @@ export default function Sidebar() {
                 </div>
             </div>
 
-            {/* 1. Domain Name & Structure */}
             <section className="space-y-4">
                 <button 
                     onClick={() => setIsNameExpanded(!isNameExpanded)} 
@@ -236,7 +243,6 @@ export default function Sidebar() {
                 
                 {isNameExpanded && (
                     <div className="space-y-4">
-                        {/* Length First */}
                         <div className="space-y-1">
                             <label className="text-xs text-slate-400">Length</label>
                             <div className="flex gap-2">
@@ -245,16 +251,14 @@ export default function Sidebar() {
                             </div>
                         </div>
 
-                        {/* Contains */}
                         <input 
                             type="text" 
                             value={filters.matchText} 
                             onChange={(e) => updateFilter('matchText', e.target.value)} 
                             className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-sm focus:border-green-500 outline-none" 
-                            placeholder="Contains"
+                            placeholder="Contains / Regex"
                         />
 
-                        {/* Starts / Ends */}
                         <div className="flex gap-2">
                             <input 
                                 type="text" 
@@ -272,7 +276,6 @@ export default function Sidebar() {
                             />
                         </div>
 
-                        {/* Hyphens & Numbers Dropdowns */}
                         <div className="flex gap-2 pt-1">
                             <div className="w-1/2 space-y-1">
                                 <label className="text-xs text-slate-400">Hyphens</label>
@@ -298,7 +301,6 @@ export default function Sidebar() {
                 )}
             </section>
 
-            {/* 2. TLD & Status */}
             <section className="space-y-4">
                 <button 
                     onClick={() => setIsTldExpanded(!isTldExpanded)} 
@@ -327,7 +329,6 @@ export default function Sidebar() {
                             </div>
                         )}
 
-                        {/* Status - Hidden if only 1 status exists besides 'Any' */}
                         {availableStatuses.length > 2 && (
                             <div className="space-y-1">
                                 <label className="text-xs text-slate-400">Status</label>
@@ -340,7 +341,6 @@ export default function Sidebar() {
                 )}
             </section>
 
-            {/* 3. Toggle Columns */}
             <section className="space-y-2">
                 <button 
                     onClick={() => setIsColumnsExpanded(!isColumnsExpanded)} 
@@ -367,7 +367,6 @@ export default function Sidebar() {
                 )}
             </section>
 
-            {/* 4. Advanced (Collapsible) */}
             <section className="space-y-2">
                 <button 
                     onClick={() => setIsAdvancedExpanded(!isAdvancedExpanded)} 
@@ -395,7 +394,6 @@ export default function Sidebar() {
             </section>
         </div>
 
-        {/* Footer */}
         <div className="p-4 bg-slate-800/50 border-t border-slate-800 space-y-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.3)]">
              <div className="flex justify-between items-center">
                 <span className="text-xs text-slate-500 font-medium">Results Found</span>
@@ -408,12 +406,15 @@ export default function Sidebar() {
             >
                 {copyFeedback || 'Copy Visible Domains'}
             </button>
+            <p className="text-[10px] text-slate-500 text-center">Applies to current page only.</p>
         </div>
 
       </div>
       
-      {/* Collapsed Bar */}
-      <div className={`h-full flex flex-col items-center pt-8 bg-slate-900 ${isCollapsed ? 'block' : 'hidden'}`}>
+      <div 
+        className={`h-full flex flex-col items-center pt-8 bg-slate-900 ${isCollapsed ? 'block cursor-pointer hover:bg-slate-800 transition-colors' : 'hidden'}`}
+        onClick={() => setIsCollapsed(false)}
+      >
         <span className="text-green-500 font-bold text-sm vertical-text tracking-widest uppercase opacity-50">PowerTools</span>
       </div>
 
