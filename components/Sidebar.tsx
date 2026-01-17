@@ -63,8 +63,9 @@ export default function Sidebar() {
 
     rows.forEach(row => {
         const domainLink = row.querySelector('td:first-child a');
-        if (domainLink?.textContent) {
-            const parts = domainLink.textContent.trim().split('.');
+        if (domainLink) {
+            const fullDomain = domainLink.getAttribute('title')?.trim() || domainLink.textContent?.trim() || '';
+            const parts = fullDomain.split('.');
             if (parts.length > 1) {
                 const tld = parts.slice(1).join('.');
                 tldMap.set(tld, (tldMap.get(tld) || 0) + 1);
@@ -180,10 +181,7 @@ export default function Sidebar() {
                     <div className="space-y-4">
                         {/* Length First */}
                         <div className="space-y-1">
-                            <label className="text-xs text-slate-400 flex justify-between">
-                                <span>Length</span>
-                                <span className="text-green-500 font-mono">{filters.minLength || 1} - {filters.maxLength || 63}</span>
-                            </label>
+                            <label className="text-xs text-slate-400">Length</label>
                             <div className="flex gap-2">
                                 <input type="number" placeholder="Min" value={filters.minLength} onChange={(e) => updateFilter('minLength', e.target.value)} className="w-1/2 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm focus:border-green-500 outline-none"/>
                                 <input type="number" placeholder="Max" value={filters.maxLength} onChange={(e) => updateFilter('maxLength', e.target.value)} className="w-1/2 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm focus:border-green-500 outline-none"/>
@@ -254,7 +252,7 @@ export default function Sidebar() {
                                         <button 
                                             key={tld}
                                             onClick={() => toggleTld(tld)}
-                                            className={`px-2 py-1 rounded text-[10px] border transition-all cursor-pointer ${filters.tldFilter.includes(tld) ? 'bg-green-900/40 border-green-700 text-green-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500'}`}
+                                            className={`px-2 py-1 rounded text-[10px] border transition-all cursor-pointer ${filters.tldFilter.split(',').map(s => s.trim()).includes(tld) ? 'bg-green-900/40 border-green-700 text-green-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500'}`}
                                         >
                                             .{tld} <span className="opacity-50 ml-1">{count}</span>
                                         </button>
