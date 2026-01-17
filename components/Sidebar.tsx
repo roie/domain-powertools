@@ -7,6 +7,11 @@ interface ColumnDef {
   tooltip: string;
 }
 
+interface Preset {
+  name: string;
+  filters: FilterState;
+}
+
 const DEFAULT_FILTERS: FilterState = {
   matchType: 'all',
   matchText: '',
@@ -39,7 +44,41 @@ export default function Sidebar() {
   const [isAdvancedExpanded, setIsAdvancedExpanded] = useState(false);
   const [isColumnsExpanded, setIsColumnsExpanded] = useState(false);
   
+  // Presets & Settings State
+  const [presets, setPresets] = useState<Preset[]>([]);
+  const [showSettings, setShowSettings] = useState(false);
+  const [newPresetName, setNewPresetName] = useState('');
+  const [isSavingPreset, setIsSavingPreset] = useState(false);
+  const [activePresetName, setActivePresetName] = useState('');
+
   const originalRowsRef = useRef<HTMLTableRowElement[]>([]);
+
+  // Load Persistence on Mount
+  useEffect(() => {
+    const savedFilters = localStorage.getItem('dpt_filters');
+    if (savedFilters) {
+        try { setFilters(JSON.parse(savedFilters)); } catch (e) {}
+    }
+    const savedPresets = localStorage.getItem('dpt_presets');
+    if (savedPresets) {
+        try { setPresets(JSON.parse(savedPresets)); } catch (e) {}
+    }
+    const savedActive = localStorage.getItem('dpt_active_preset');
+    if (savedActive) setActivePresetName(savedActive);
+  }, []);
+
+  // Save Persistence on Change
+  useEffect(() => {
+    localStorage.setItem('dpt_filters', JSON.stringify(filters));
+  }, [filters]);
+
+  useEffect(() => {
+    localStorage.setItem('dpt_presets', JSON.stringify(presets));
+  }, [presets]);
+
+  useEffect(() => {
+    localStorage.setItem('dpt_active_preset', activePresetName);
+  }, [activePresetName]);
 
   // Detect content on mount
   useEffect(() => {
@@ -58,7 +97,7 @@ export default function Sidebar() {
 
       const fieldClass = headClass.replace('head_', 'field_');
       const link = th.querySelector('a');
-      cols.push({ 
+      cols.push({
         label: link?.textContent?.trim() || th.textContent?.trim() || '?', 
         className: fieldClass, 
         tooltip: link?.getAttribute('title') || '' 
@@ -165,6 +204,7 @@ export default function Sidebar() {
 
   const updateFilter = (key: keyof FilterState, value: any) => {
     setFilters(prev => ({ ...prev, [key]: value }));
+    setActivePresetName(''); // Clear active preset when user manually changes something
   };
 
   const toggleTld = (tld: string) => {
@@ -187,6 +227,53 @@ export default function Sidebar() {
     setTimeout(() => setCopyFeedback(''), 2000);
   };
 
+  const savePreset = () => {
+    if (!newPresetName.trim()) return;
+    setPresets(prev => [...prev, { name: newPresetName, filters: { ...filters } }]);
+    setActivePresetName(newPresetName);
+    setNewPresetName('');
+    setIsSavingPreset(false);
+  };
+
+  const loadPreset = (preset: Preset) => {
+    setFilters(preset.filters);
+    setActivePresetName(preset.name);
+  };
+
+  const deletePreset = (index: number) => {
+    const name = presets[index].name;
+    setPresets(prev => prev.filter((_, i) => i !== index));
+    if (activePresetName === name) setActivePresetName('');
+  };
+
+  const exportPresets = () => {
+    const blob = new Blob([JSON.stringify(presets, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'domain-powertools-presets.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importPresets = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        try {
+            const imported = JSON.parse(event.target?.result as string);
+            if (Array.isArray(imported)) {
+                setPresets(prev => [...prev, ...imported]); // Merge
+                alert('Presets imported successfully!');
+            }
+        } catch (err) {
+            alert('Invalid file format.');
+        }
+    };
+    reader.readAsText(file);
+  };
+
   return (
     <div className={`fixed top-0 right-0 h-full bg-slate-900 text-slate-100 shadow-2xl z-[9999] border-l border-slate-700 font-sans transition-all duration-300 ease-in-out ${isCollapsed ? 'w-12' : 'w-80'}`}>
       
@@ -199,9 +286,53 @@ export default function Sidebar() {
 
       <div className={`flex flex-col h-full ${isCollapsed ? 'hidden' : 'flex'}`}>
         
-        <div className="p-4 flex-shrink-0 flex justify-between items-center border-b border-slate-800">
-           <h2 className="text-lg font-bold text-green-400">Domain PowerTools</h2>
-           <button onClick={() => setFilters(DEFAULT_FILTERS)} className="text-xs text-slate-400 hover:text-white underline cursor-pointer">Reset</button>
+        <div className="p-4 flex-shrink-0 bg-slate-900 z-10 border-b border-slate-800">
+           <div className="flex justify-between items-center mb-3">
+               <h2 className="text-lg font-bold text-green-400">Domain Powertools</h2>
+               <div className="flex gap-2">
+                   <button onClick={() => setShowSettings(true)} className="text-slate-400 hover:text-white transition-colors" title="Settings">⚙️</button>
+                   <button onClick={() => { setFilters(DEFAULT_FILTERS); setActivePresetName(''); }} className="text-xs text-slate-400 hover:text-white underline cursor-pointer">Reset</button>
+               </div>
+           </div>
+
+           <div className="flex gap-2">
+               {isSavingPreset ? (
+                   <div className="flex gap-1 w-full animate-fade-in">
+                       <input 
+                           type="text" 
+                           value={newPresetName} 
+                           onChange={(e) => setNewPresetName(e.target.value)} 
+                           placeholder="Preset Name" 
+                           className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:border-green-500 outline-none"
+                           autoFocus
+                           onKeyDown={(e) => e.key === 'Enter' && savePreset()}
+                       />
+                       <button onClick={savePreset} className="text-green-400 hover:text-green-300 text-xs px-1">✓</button>
+                       <button onClick={() => setIsSavingPreset(false)} className="text-red-400 hover:text-red-300 text-xs px-1">✕</button>
+                   </div>
+               ) : (
+                   <>
+                       <select 
+                           value={activePresetName}
+                           onChange={(e) => {
+                               const preset = presets.find(p => p.name === e.target.value);
+                               if (preset) loadPreset(preset);
+                           }}
+                           className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs cursor-pointer outline-none hover:bg-slate-700 transition-colors"
+                       >
+                           <option value="">Load Preset...</option>
+                           {presets.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+                       </select>
+                       <button 
+                           onClick={() => setIsSavingPreset(true)} 
+                           className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs hover:bg-slate-700 hover:text-green-400 transition-colors text-slate-400"
+                           title="Save Current Filter as Preset"
+                       >
+                           💾
+                       </button>
+                   </>
+               )}
+           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-6">
@@ -358,7 +489,7 @@ export default function Sidebar() {
                                     setHiddenColumns(prev => prev.includes(col.className) ? prev.filter(c => c !== col.className) : [...prev, col.className]);
                                 }}
                                 title={col.tooltip}
-                                className={`text-[10px] py-1 px-2 rounded border truncate transition-all cursor-pointer ${hiddenColumns.includes(col.className) ? 'bg-red-900/20 border-red-900 text-slate-600' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'}`}
+                                className={`text-[10px] py-1.5 px-2 rounded border truncate transition-all cursor-pointer ${hiddenColumns.includes(col.className) ? 'bg-red-900/20 border-red-900 text-slate-600' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'}`}
                             >
                                 {col.label}
                             </button>
@@ -411,11 +542,54 @@ export default function Sidebar() {
 
       </div>
       
+      {/* Settings Modal */}
+      {showSettings && (
+        <div className="absolute inset-0 bg-slate-900 z-50 flex flex-col p-4 animate-in fade-in slide-in-from-bottom-4 duration-200">
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-lg font-bold text-white">Settings</h2>
+                <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-white p-1">✕</button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-6">
+                
+                <section>
+                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Saved Presets</h3>
+                    {presets.length === 0 ? (
+                        <p className="text-sm text-slate-500 italic">No presets saved yet.</p>
+                    ) : (
+                        <div className="space-y-2">
+                            {presets.map((p, i) => (
+                                <div key={i} className="flex justify-between items-center bg-slate-800 p-3 rounded border border-slate-700">
+                                    <span className="text-sm font-medium">{p.name}</span>
+                                    <button onClick={() => deletePreset(i)} className="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded bg-red-900/20 hover:bg-red-900/40 transition-colors">Delete</button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </section>
+
+                <section>
+                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Backup & Restore</h3>
+                    <div className="flex gap-2">
+                        <button onClick={exportPresets} className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm py-2 px-4 rounded border border-slate-700 transition-colors">
+                            Export to File
+                        </button>
+                        <label className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm py-2 px-4 rounded border border-slate-700 transition-colors text-center cursor-pointer">
+                            Import File
+                            <input type="file" accept=".json" onChange={importPresets} className="hidden" />
+                        </label>
+                    </div>
+                </section>
+
+            </div>
+        </div>
+      )}
+
       <div 
         className={`h-full flex flex-col items-center pt-8 bg-slate-900 ${isCollapsed ? 'block cursor-pointer hover:bg-slate-800 transition-colors' : 'hidden'}`}
         onClick={() => setIsCollapsed(false)}
       >
-        <span className="text-green-500 font-bold text-sm vertical-text tracking-widest uppercase opacity-50">PowerTools</span>
+        <span className="text-green-500 font-bold text-sm vertical-text tracking-widest uppercase opacity-50">Domain Powertools</span>
       </div>
 
       <style>{`
