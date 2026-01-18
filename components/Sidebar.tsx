@@ -28,7 +28,6 @@ const DEFAULT_FILTERS: FilterState = {
   minLength: '',
   maxLength: '',
   hyphenSetting: 'any',
-  noConsecutiveHyphens: false,
   numberSetting: 'any',
   pattern: '',
   tldFilter: '',
@@ -62,6 +61,7 @@ export default function Sidebar() {
   const [isTldExpanded, setIsTldExpanded] = useState(false);
   const [isAdvancedExpanded, setIsAdvancedExpanded] = useState(false);
   const [isColumnsExpanded, setIsColumnsExpanded] = useState(false);
+  const [isVisualsExpanded, setIsVisualsExpanded] = useState(false);
 
   // --- Persistence Logic ---
   const isLoaded = useRef(false);
@@ -82,7 +82,7 @@ export default function Sidebar() {
                 'dpt_hidden_columns', 
                 'dpt_sort_config',
                 'dpt_heatmap'
-            ]);
+            ]) as any;
             
             if (res.dpt_filters) setFilters(res.dpt_filters);
             if (res.dpt_presets) setPresets(res.dpt_presets);
@@ -191,7 +191,7 @@ export default function Sidebar() {
               cell.style.backgroundColor = '';
               return;
           }
-          const className = Array.from(cell.classList).find(c => c.startsWith('field_'));
+          const className = Array.from(cell.classList).find(c => c.startsWith('field_')) as string;
           if (className) {
               const color = getHeatColor(className, cell.textContent?.trim() || '');
               cell.style.backgroundColor = color || '';
@@ -343,7 +343,13 @@ export default function Sidebar() {
                <h2 className="text-lg font-bold text-green-400">Domain Powertools</h2>
                <div className="flex gap-2">
                    <button onClick={() => setShowSettings(true)} className="text-slate-400 hover:text-white transition-colors cursor-pointer" title="Settings">⚙️</button>
-                   <button onClick={() => { setFilters(DEFAULT_FILTERS); setHiddenColumns([]); setSortConfig({ column: '', direction: 'asc' }); setActivePresetName(''); }} className="text-xs text-slate-400 hover:text-white underline cursor-pointer">Reset</button>
+                   <button onClick={() => {
+                       setFilters(DEFAULT_FILTERS); 
+                       setHiddenColumns([]); 
+                       setSortConfig({ column: '', direction: 'asc' }); 
+                       setActivePresetName(''); 
+                       setIsHeatmapEnabled(false);
+                   }} className="text-xs text-slate-400 hover:text-white underline cursor-pointer">Reset</button>
                </div>
            </div>
            <div className="flex gap-2">
@@ -394,8 +400,7 @@ export default function Sidebar() {
                 <button onClick={() => setIsTldExpanded(!isTldExpanded)} className="w-full flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wider cursor-pointer px-2 py-2 rounded bg-slate-800/30 hover:bg-slate-800 transition-colors"><span>TLD & Status</span><span>{isTldExpanded ? '−' : '+'}</span></button>
                 {isTldExpanded && (
                     <div className="space-y-4">
-                        {detectedTlds.length > 0 && (<div className="space-y-2"><label className="text-xs text-slate-400">TLDs (Top 10)</label><div className="flex flex-wrap gap-1.5">{detectedTlds.map(({ tld, count }) => (<button key={tld} onClick={() => toggleTld(tld)} className={`px-2 py-1 rounded text-[10px] border cursor-pointer transition-all ${filters.tldFilter.split(',').map(s => s.trim()).includes(tld) ? 'bg-green-900/40 border-green-700 text-green-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500'}`}>.{tld} <span className="opacity-50 ml-1">{count}</span></button>))}
-</div></div>)}
+                        {detectedTlds.length > 0 && (<div className="space-y-2"><label className="text-xs text-slate-400">TLDs (Top 10)</label><div className="flex flex-wrap gap-1.5">{detectedTlds.map(({ tld, count }) => (<button key={tld} onClick={() => toggleTld(tld)} className={`px-2 py-1 rounded text-[10px] border cursor-pointer transition-all ${filters.tldFilter.split(',').map(s => s.trim()).includes(tld) ? 'bg-green-900/40 border-green-700 text-green-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500'}`}>.{tld} <span className="opacity-50 ml-1">{count}</span></button>))}</div></div>)}
                         {availableStatuses.length > 2 && (<div className="space-y-1"><label className="text-xs text-slate-400">Status</label><select value={filters.statusFilter} onChange={(e) => updateFilter('statusFilter', e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm outline-none cursor-pointer hover:bg-slate-750 transition-colors">{availableStatuses.map(s => <option key={s} value={s}>{s}</option>)}</select></div>)}
                     </div>
                 )}
