@@ -10,7 +10,6 @@ export type FilterState = {
   minLength: number | '';
   maxLength: number | '';
   hyphenSetting: 'any' | 'none' | 'max1' | 'max2';
-  noConsecutiveHyphens: boolean;
   numberSetting: 'any' | 'none' | 'max1' | 'max2' | 'only';
   
   // Pattern
@@ -34,12 +33,21 @@ export const filterDomain = (
   if (filters.minLength !== '' && sld.length < Number(filters.minLength)) return false;
   if (filters.maxLength !== '' && sld.length > Number(filters.maxLength)) return false;
 
-  // 2. Text Match
-  if (filters.matchText && !sld.includes(filters.matchText.toLowerCase())) return false;
+  // 2. Text Match (with Regex Support)
+  if (filters.matchText) {
+    try {
+      const regex = new RegExp(filters.matchText, 'i');
+      if (!regex.test(sld)) return false;
+    } catch (e) {
+      // Fallback to simple includes if regex is invalid
+      if (!sld.includes(filters.matchText.toLowerCase())) return false;
+    }
+  }
+  
   if (filters.startsWith && !sld.startsWith(filters.startsWith.toLowerCase())) return false;
   if (filters.endsWith && !sld.endsWith(filters.endsWith.toLowerCase())) return false;
 
-  // 3. Blacklist
+  // 3. Blacklist (Exclude)
   if (filters.blacklist) {
     const badWords = filters.blacklist.toLowerCase().split(',').map(s => s.trim()).filter(Boolean);
     if (badWords.some(word => sld.includes(word))) return false;
@@ -50,7 +58,6 @@ export const filterDomain = (
   if (filters.hyphenSetting === 'none' && hyphenCount > 0) return false;
   if (filters.hyphenSetting === 'max1' && hyphenCount > 1) return false;
   if (filters.hyphenSetting === 'max2' && hyphenCount > 2) return false;
-  if (filters.noConsecutiveHyphens && sld.includes('--')) return false;
 
   // 5. Numbers
   const numberCount = (sld.match(/[0-9]/g) || []).length;

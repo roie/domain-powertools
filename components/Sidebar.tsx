@@ -3,6 +3,8 @@ import { browser } from 'wxt/browser';
 import { FilterState, filterDomain, sortRows, getHeatColor } from './FilterEngine';
 
 const TABLE_SELECTOR = '#listing table.base1';
+const DOMAIN_LINK_SELECTOR = 'td.field_domain a';
+const STATUS_CELL_SELECTOR = 'td.field_whois';
 
 interface ColumnDef {
   label: string;
@@ -60,7 +62,6 @@ export default function Sidebar() {
   const [isTldExpanded, setIsTldExpanded] = useState(false);
   const [isAdvancedExpanded, setIsAdvancedExpanded] = useState(false);
   const [isColumnsExpanded, setIsColumnsExpanded] = useState(false);
-  const [isVisualsExpanded, setIsVisualsExpanded] = useState(false);
 
   // --- Persistence Logic ---
   const isLoaded = useRef(false);
@@ -143,7 +144,7 @@ export default function Sidebar() {
     const statusSet = new Set<string>();
     const tldMap = new Map<string, number>();
     rows.forEach(row => {
-        const domainLink = row.querySelector('td.field_domain a');
+        const domainLink = row.querySelector(DOMAIN_LINK_SELECTOR);
         if (domainLink) {
             const fullDomain = domainLink.getAttribute('title')?.trim() || domainLink.textContent?.trim() || '';
             const parts = fullDomain.split('.');
@@ -152,7 +153,7 @@ export default function Sidebar() {
                 tldMap.set(tld, (tldMap.get(tld) || 0) + 1);
             }
         }
-        const statusCell = row.querySelector('td.field_whois');
+        const statusCell = row.querySelector(STATUS_CELL_SELECTOR);
         const statusText = statusCell?.querySelector('a')?.textContent || statusCell?.textContent;
         if (statusText) statusSet.add(statusText.trim());
     });
@@ -174,8 +175,8 @@ export default function Sidebar() {
     let count = 0;
 
     rows.forEach((row) => {
-      const domainLink = row.querySelector('td.field_domain a'); 
-      const statusCell = row.querySelector('td.field_whois');
+      const domainLink = row.querySelector(DOMAIN_LINK_SELECTOR); 
+      const statusCell = row.querySelector(STATUS_CELL_SELECTOR);
       if (!domainLink) return;
       const domainName = domainLink.getAttribute('title')?.trim() || domainLink.textContent?.trim() || '';
       const statusText = statusCell?.querySelector('a')?.textContent?.trim() || statusCell?.textContent?.trim() || '';
@@ -232,7 +233,7 @@ export default function Sidebar() {
     const domains: string[] = [];
     document.querySelectorAll(`${TABLE_SELECTOR} tbody tr`).forEach(row => {
       if ((row as HTMLElement).style.display !== 'none') {
-        const link = row.querySelector('td.field_domain a');
+        const link = row.querySelector(DOMAIN_LINK_SELECTOR);
         const d = link?.getAttribute('title') || link?.textContent;
         if (d) domains.push(d.trim());
       }
@@ -316,7 +317,9 @@ export default function Sidebar() {
           tempCell.querySelectorAll('ul, .kmenucontent, style, script').forEach(el => el.remove());
           val = tempCell.textContent?.trim() || ''; 
         }
-        return '"' + val.split('"').join('""') + '"';
+        // Properly escape quotes for CSV
+        const escapedVal = val.replace(/"/g, '""');
+        return '"' + escapedVal + '"';
       });
       csvRows.push(rowData.join(','));
     });
@@ -364,7 +367,24 @@ export default function Sidebar() {
                 {isNameExpanded && (
                     <div className="space-y-4">
                         <div className="space-y-1"><label className="text-xs text-slate-400">Length</label><div className="flex gap-2"><input type="number" placeholder="Min" value={filters.minLength} onChange={(e) => updateFilter('minLength', e.target.value)} className="w-1/2 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm outline-none focus:border-slate-500"/><input type="number" placeholder="Max" value={filters.maxLength} onChange={(e) => updateFilter('maxLength', e.target.value)} className="w-1/2 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm outline-none focus:border-slate-500"/></div></div>
-                        <input type="text" value={filters.matchText} onChange={(e) => updateFilter('matchText', e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-sm outline-none focus:border-green-500" placeholder="Contains / Regex"/>
+                        
+                        <div className="flex gap-2">
+                            <input 
+                                type="text" 
+                                value={filters.matchText} 
+                                onChange={(e) => updateFilter('matchText', e.target.value)} 
+                                className="w-1/2 bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm outline-none focus:border-green-500" 
+                                placeholder="Contains"
+                            />
+                            <input 
+                                type="text" 
+                                value={filters.blacklist} 
+                                onChange={(e) => updateFilter('blacklist', e.target.value)} 
+                                className="w-1/2 bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm outline-none focus:border-red-500" 
+                                placeholder="Exclude"
+                            />
+                        </div>
+
                         <div className="flex gap-2"><input type="text" value={filters.startsWith} onChange={(e) => updateFilter('startsWith', e.target.value)} className="w-1/2 bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm outline-none focus:border-green-500" placeholder="Starts With"/><input type="text" value={filters.endsWith} onChange={(e) => updateFilter('endsWith', e.target.value)} className="w-1/2 bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm outline-none focus:border-green-500" placeholder="Ends With"/></div>
                         <div className="flex gap-2 pt-1"><div className="w-1/2 space-y-1"><label className="text-xs text-slate-400">Hyphens</label><select value={filters.hyphenSetting} onChange={(e) => updateFilter('hyphenSetting', e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm outline-none cursor-pointer hover:bg-slate-750 transition-colors"><option value="any">Any</option><option value="none">None</option><option value="max1">Max 1</option><option value="max2">Max 2</option></select></div><div className="w-1/2 space-y-1"><label className="text-xs text-slate-400">Numbers</label><select value={filters.numberSetting} onChange={(e) => updateFilter('numberSetting', e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm outline-none cursor-pointer hover:bg-slate-750 transition-colors"><option value="any">Any</option><option value="none">None</option><option value="max1">Max 1</option><option value="max2">Max 2</option><option value="only">Only</option></select></div></div>
                     </div>
@@ -382,9 +402,13 @@ export default function Sidebar() {
             </section>
 
             <section className="space-y-2">
-                <button onClick={() => setIsVisualsExpanded(!isVisualsExpanded)} className="w-full flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wider cursor-pointer px-2 py-2 rounded bg-slate-800/30 hover:bg-slate-800 transition-colors"><span>Visuals</span><span>{isVisualsExpanded ? '−' : '+'}</span></button>
-                {isVisualsExpanded && (
-                    <div className="p-2 space-y-3">
+                <button onClick={() => setIsColumnsExpanded(!isColumnsExpanded)} className="w-full flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wider cursor-pointer px-2 py-2 rounded bg-slate-800/30 hover:bg-slate-800 transition-colors"><span>Toggle Columns</span><span>{isColumnsExpanded ? '−' : '+'}</span></button>
+                {isColumnsExpanded && (<div className="grid grid-cols-2 gap-2 p-1">{columns.map(col => (<button key={col.className} onClick={() => { setHiddenColumns(prev => prev.includes(col.className) ? prev.filter(c => c !== col.className) : [...prev, col.className]); setActivePresetName(''); }} title={col.tooltip} className={`text-[10px] py-1.5 px-2 rounded border truncate cursor-pointer transition-all ${hiddenColumns.includes(col.className) ? 'bg-red-900/20 border-red-900 text-slate-600' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-slate-200'}`}>{col.label}</button>))}</div>)}
+            </section>
+            <section className="space-y-2">
+                <button onClick={() => setIsAdvancedExpanded(!isAdvancedExpanded)} className="w-full flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wider cursor-pointer px-2 py-2 rounded bg-slate-800/30 hover:bg-slate-800 transition-colors"><span>Advanced</span><span>{isAdvancedExpanded ? '−' : '+'}</span></button>
+                {isAdvancedExpanded && (
+                    <div className="space-y-4 pt-2">
                         <label className="flex items-center justify-between cursor-pointer group">
                             <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">Enable Heatmap</span>
                             <div className="relative">
@@ -392,22 +416,7 @@ export default function Sidebar() {
                                 <div className="w-8 h-4 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-green-600"></div>
                             </div>
                         </label>
-                    </div>
-                )}
-            </section>
-
-            <section className="space-y-2">
-                <button onClick={() => setIsColumnsExpanded(!isColumnsExpanded)} className="w-full flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wider cursor-pointer px-2 py-2 rounded bg-slate-800/30 hover:bg-slate-800 transition-colors"><span>Toggle Columns</span><span>{isColumnsExpanded ? '−' : '+'}</span></button>
-                {isColumnsExpanded && (<div className="grid grid-cols-2 gap-2 p-1">{columns.map(col => (<button key={col.className} onClick={() => { setHiddenColumns(prev => prev.includes(col.className) ? prev.filter(c => c !== col.className) : [...prev, col.className]); setActivePresetName(''); }} title={col.tooltip} className={`text-[10px] py-1.5 px-2 rounded border truncate cursor-pointer transition-all ${hiddenColumns.includes(col.className) ? 'bg-red-900/20 border-red-900 text-slate-600' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-slate-200'}`}>{col.label}</button>))}
-</div>)}
-            </section>
-            <section className="space-y-2">
-                <button onClick={() => setIsAdvancedExpanded(!isAdvancedExpanded)} className="w-full flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wider cursor-pointer px-2 py-2 rounded bg-slate-800/30 hover:bg-slate-800 transition-colors"><span>Advanced Filters</span><span>{isAdvancedExpanded ? '−' : '+'}</span></button>
-                {isAdvancedExpanded && (
-                    <div className="space-y-4 pt-2">
                         <div className="space-y-1"><label className="text-xs text-slate-400">Custom Pattern</label><input type="text" value={filters.pattern} onChange={(e) => updateFilter('pattern', e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-sm outline-none focus:border-green-500" placeholder="e.g. cvcv"/></div>
-                        <div className="space-y-1"><label className="text-xs text-slate-400">Blacklist</label><input type="text" value={filters.blacklist} onChange={(e) => updateFilter('blacklist', e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-sm outline-none focus:border-red-500" placeholder="cheap, free..."/></div>
-                        <label className="flex items-center gap-2 cursor-pointer group"><input type="checkbox" checked={filters.noConsecutiveHyphens} onChange={(e) => updateFilter('noConsecutiveHyphens', e.target.checked)} className="rounded border-slate-700 bg-slate-800 text-green-600 focus:ring-green-500"/><span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">No Consecutive Hyphens (--)</span></label>
                     </div>
                 )}
             </section>
@@ -430,7 +439,8 @@ export default function Sidebar() {
                         <div className="space-y-2">{presets.map((p, i) => (
                             <div key={i} className="flex justify-between items-center bg-slate-800 p-3 rounded border border-slate-700"><span className="text-sm font-medium">{p.name}</span><button onClick={() => deletePreset(i)} className="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded bg-red-900/20 cursor-pointer transition-colors">Delete</button></div>
                         ))}
-</div>)}
+</div>
+                    )}
                 </section>
                 <section><h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Backup & Restore</h3><div className="flex gap-2"><button onClick={exportPresets} className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm py-2 px-4 rounded border border-slate-700 transition-colors cursor-pointer">Export</button><label className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm py-2 px-4 rounded border border-slate-700 text-center cursor-pointer transition-colors">Import<input type="file" accept=".json" onChange={importPresets} className="hidden"/></label></div></section>
             </div>
