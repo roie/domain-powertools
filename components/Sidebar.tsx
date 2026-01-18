@@ -17,6 +17,12 @@ interface Preset {
   filters: FilterState;
   hiddenColumns: string[];
   sortConfig: { column: string; direction: 'asc' | 'desc' };
+  expansionState: {
+    name: boolean;
+    tld: boolean;
+    advanced: boolean;
+    columns: boolean;
+  };
 }
 
 const DEFAULT_FILTERS: FilterState = {
@@ -61,7 +67,6 @@ export default function Sidebar() {
   const [isTldExpanded, setIsTldExpanded] = useState(false);
   const [isAdvancedExpanded, setIsAdvancedExpanded] = useState(false);
   const [isColumnsExpanded, setIsColumnsExpanded] = useState(false);
-  const [isVisualsExpanded, setIsVisualsExpanded] = useState(false);
 
   // --- Persistence Logic ---
   const isLoaded = useRef(false);
@@ -81,7 +86,11 @@ export default function Sidebar() {
                 'dpt_active_preset', 
                 'dpt_hidden_columns', 
                 'dpt_sort_config',
-                'dpt_heatmap'
+                'dpt_heatmap',
+                'dpt_exp_name',
+                'dpt_exp_tld',
+                'dpt_exp_adv',
+                'dpt_exp_cols'
             ]) as any;
             
             if (res.dpt_filters) setFilters(res.dpt_filters);
@@ -90,6 +99,12 @@ export default function Sidebar() {
             if (res.dpt_hidden_columns) setHiddenColumns(res.dpt_hidden_columns);
             if (res.dpt_sort_config) setSortConfig(res.dpt_sort_config);
             if (res.dpt_heatmap !== undefined) setIsHeatmapEnabled(res.dpt_heatmap);
+            
+            // Expansion States
+            if (res.dpt_exp_name !== undefined) setIsNameExpanded(res.dpt_exp_name);
+            if (res.dpt_exp_tld !== undefined) setIsTldExpanded(res.dpt_exp_tld);
+            if (res.dpt_exp_adv !== undefined) setIsAdvancedExpanded(res.dpt_exp_adv);
+            if (res.dpt_exp_cols !== undefined) setIsColumnsExpanded(res.dpt_exp_cols);
             
         } catch (e) {
             console.error("Domain Powertools: Failed to load settings", e);
@@ -112,12 +127,16 @@ export default function Sidebar() {
             dpt_active_preset: activePresetName,
             dpt_hidden_columns: hiddenColumns,
             dpt_sort_config: sortConfig,
-            dpt_heatmap: isHeatmapEnabled
+            dpt_heatmap: isHeatmapEnabled,
+            dpt_exp_name: isNameExpanded,
+            dpt_exp_tld: isTldExpanded,
+            dpt_exp_adv: isAdvancedExpanded,
+            dpt_exp_cols: isColumnsExpanded
         });
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [filters, presets, activePresetName, hiddenColumns, sortConfig, isHeatmapEnabled]);
+  }, [filters, presets, activePresetName, hiddenColumns, sortConfig, isHeatmapEnabled, isNameExpanded, isTldExpanded, isAdvancedExpanded, isColumnsExpanded]);
 
   // --- DOM Detection (Mount) ---
   useEffect(() => {
@@ -249,7 +268,13 @@ export default function Sidebar() {
         name: newPresetName,
         filters: { ...filters },
         hiddenColumns: [...hiddenColumns],
-        sortConfig: { ...sortConfig }
+        sortConfig: { ...sortConfig },
+        expansionState: {
+            name: isNameExpanded,
+            tld: isTldExpanded,
+            advanced: isAdvancedExpanded,
+            columns: isColumnsExpanded
+        }
     };
     setPresets(prev => [...prev, newPreset]);
     setActivePresetName(newPresetName);
@@ -261,6 +286,12 @@ export default function Sidebar() {
     setFilters(p.filters);
     setHiddenColumns(p.hiddenColumns || []);
     setSortConfig(p.sortConfig || { column: '', direction: 'asc' });
+    if (p.expansionState) {
+        setIsNameExpanded(p.expansionState.name);
+        setIsTldExpanded(p.expansionState.tld);
+        setIsAdvancedExpanded(p.expansionState.advanced);
+        setIsColumnsExpanded(p.expansionState.columns);
+    }
     setActivePresetName(p.name);
   };
 
@@ -349,6 +380,10 @@ export default function Sidebar() {
                        setSortConfig({ column: '', direction: 'asc' }); 
                        setActivePresetName(''); 
                        setIsHeatmapEnabled(false);
+                       setIsNameExpanded(true);
+                       setIsTldExpanded(false);
+                       setIsAdvancedExpanded(false);
+                       setIsColumnsExpanded(false);
                    }} className="text-xs text-slate-400 hover:text-white underline cursor-pointer">Reset</button>
                </div>
            </div>
