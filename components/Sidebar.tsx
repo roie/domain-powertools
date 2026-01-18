@@ -54,6 +54,7 @@ export default function Sidebar() {
   const [columns, setColumns] = useState<ColumnDef[]>([]);
   const [availableStatuses, setAvailableStatuses] = useState<string[]>(['Any']);
   const [detectedTlds, setDetectedTlds] = useState<{ tld: string, count: number }[]>([]);
+  const [variedColumnClasses, setVariedColumnClasses] = useState<string[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [newPresetName, setNewPresetName] = useState('');
   const [isSavingPreset, setIsSavingPreset] = useState(false);
@@ -149,10 +150,14 @@ export default function Sidebar() {
     const cols: ColumnDef[] = [];
     headers.forEach((th) => {
       const headClass = Array.from(th.classList).find(c => c.startsWith('head_'));
-      if (!headClass || headClass === 'head_watchlist' || headClass === 'head_domain') return;
+      const label = th.querySelector('a')?.textContent?.trim() || th.textContent?.trim() || '?';
+      
+      // Skip RL (Related Links), watchlist, domain, and non-sortable utility columns
+      if (!headClass || headClass === 'head_watchlist' || headClass === 'head_domain' || headClass === 'head_relatedlinks' || label === 'RL') return;
+      
       const fieldClass = headClass.replace('head_', 'field_');
       cols.push({
-        label: th.querySelector('a')?.textContent?.trim() || th.textContent?.trim() || '?', 
+        label, 
         className: fieldClass, 
         tooltip: th.querySelector('a')?.getAttribute('title') || '' 
       });
@@ -162,6 +167,19 @@ export default function Sidebar() {
     const rows = originalRowsRef.current;
     const statusSet = new Set<string>();
     const tldMap = new Map<string, number>();
+    const variedColsSet = new Set<string>();
+    
+    // Check variation for each column
+    cols.forEach(col => {
+        const uniqueValues = new Set<string>();
+        rows.forEach(row => {
+            const val = row.querySelector(`td.${col.className}`)?.textContent?.trim() || '';
+            uniqueValues.add(val);
+        });
+        if (uniqueValues.size > 1) variedColsSet.add(col.className);
+    });
+    setVariedColumnClasses(Array.from(variedColsSet));
+
     rows.forEach(row => {
         const domainLink = row.querySelector(DOMAIN_LINK_SELECTOR);
         if (domainLink) {
@@ -409,7 +427,20 @@ export default function Sidebar() {
             <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider px-1">Sort By</label>
                 <div className="flex gap-2">
-                    <select value={sortConfig.column} onChange={(e) => { setSortConfig(prev => ({ ...prev, column: e.target.value })); setActivePresetName(''); }} className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm cursor-pointer outline-none focus:border-green-500 transition-colors"><option value="">Default Order</option><option value="field_domain">Domain</option>{columns.filter(col => !hiddenColumns.includes(col.className)).map(col => (<option key={col.className} value={col.className}>{col.label}</option>))}</select>
+                    <select value={sortConfig.column} onChange={(e) => { setSortConfig(prev => ({ ...prev, column: e.target.value })); setActivePresetName(''); }} className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm cursor-pointer outline-none focus:border-green-500 transition-colors">
+                        <option value="">Default Order</option>
+                        <option value="field_domain">Domain</option>
+                        {columns.filter(col => !hiddenColumns.includes(col.className)).map(col => {
+                            const hasVariation = variedColumnClasses.includes(col.className);
+                            const isSelected = sortConfig.column === col.className;
+                            if (!hasVariation && !isSelected) return null;
+                            return (
+                                <option key={col.className} value={col.className}>
+                                    {col.label} {!hasVariation && '(no variation)'}
+                                </option>
+                            );
+                        })}
+                    </select>
                     {sortConfig.column && <button onClick={() => { setSortConfig(prev => ({ ...prev, direction: prev.direction === 'asc' ? 'desc' : 'asc' })); setActivePresetName(''); }} className="bg-slate-800 border border-slate-700 rounded px-3 py-1 text-sm font-bold cursor-pointer hover:bg-slate-700 text-green-400 transition-colors">
                         {sortConfig.direction === 'asc' ? (
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7"/></svg>
