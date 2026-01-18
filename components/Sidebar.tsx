@@ -463,9 +463,11 @@ export default function Sidebar() {
         </div>
         <div className="p-4 bg-slate-800/50 border-t border-slate-800 space-y-3 shadow-lg">
              <div className="flex justify-between items-center"><span className="text-xs text-slate-500 font-medium">Results Found</span><span className="text-xl font-bold text-white tabular-nums">{visibleCount}</span></div>
-             <div className="flex flex-col gap-2">
-                <button onClick={copyVisible} disabled={!!copyFeedback} className={`w-full font-bold py-2 rounded transition-all cursor-pointer shadow-lg text-sm ${copyFeedback ? 'bg-green-700 text-white' : 'bg-green-600 hover:bg-green-500 text-white active:scale-95'}`}>{copyFeedback || 'Copy Visible Domains'}</button>
-                <button onClick={exportToCSV} className="w-full font-bold py-2 rounded transition-all cursor-pointer shadow-lg text-sm bg-slate-700 hover:bg-slate-600 text-white active:scale-95 transition-all">Download CSV</button>
+             <div className="flex gap-2">
+                <button onClick={copyVisible} disabled={!!copyFeedback} className={`flex-1 font-bold py-2 rounded transition-all cursor-pointer shadow-lg text-sm ${copyFeedback ? 'bg-green-700 text-white' : 'bg-green-600 hover:bg-green-500 text-white active:scale-95'}`}>{copyFeedback || 'Copy Visible Domains'}</button>
+                <button onClick={exportToCSV} className="bg-slate-700 hover:bg-slate-600 text-white p-2 rounded transition-all cursor-pointer shadow-lg active:scale-95 flex items-center justify-center min-w-[40px]" title="Download CSV">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                </button>
              </div>
              <p className="text-[10px] text-slate-500 text-center">Applies to current page only.</p>
         </div>
