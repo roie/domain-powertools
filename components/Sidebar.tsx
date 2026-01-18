@@ -62,6 +62,7 @@ export default function Sidebar() {
   
   // --- Feature States ---
   const [isHeatmapEnabled, setIsHeatmapEnabled] = useState(false);
+  const [isPresetsEnabled, setIsPresetsEnabled] = useState(false);
 
   // --- Collapsible UI States ---
   const [isNameExpanded, setIsNameExpanded] = useState(true);
@@ -88,6 +89,7 @@ export default function Sidebar() {
                 'dpt_hidden_columns', 
                 'dpt_sort_config',
                 'dpt_heatmap',
+                'dpt_presets_enabled',
                 'dpt_exp_name',
                 'dpt_exp_tld',
                 'dpt_exp_adv',
@@ -100,6 +102,7 @@ export default function Sidebar() {
             if (res.dpt_hidden_columns) setHiddenColumns(res.dpt_hidden_columns);
             if (res.dpt_sort_config) setSortConfig(res.dpt_sort_config);
             if (res.dpt_heatmap !== undefined) setIsHeatmapEnabled(res.dpt_heatmap);
+            if (res.dpt_presets_enabled !== undefined) setIsPresetsEnabled(res.dpt_presets_enabled);
             
             // Expansion States
             if (res.dpt_exp_name !== undefined) setIsNameExpanded(res.dpt_exp_name);
@@ -129,6 +132,7 @@ export default function Sidebar() {
             dpt_hidden_columns: hiddenColumns,
             dpt_sort_config: sortConfig,
             dpt_heatmap: isHeatmapEnabled,
+            dpt_presets_enabled: isPresetsEnabled,
             dpt_exp_name: isNameExpanded,
             dpt_exp_tld: isTldExpanded,
             dpt_exp_adv: isAdvancedExpanded,
@@ -137,7 +141,7 @@ export default function Sidebar() {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [filters, presets, activePresetName, hiddenColumns, sortConfig, isHeatmapEnabled, isNameExpanded, isTldExpanded, isAdvancedExpanded, isColumnsExpanded]);
+  }, [filters, presets, activePresetName, hiddenColumns, sortConfig, isHeatmapEnabled, isPresetsEnabled, isNameExpanded, isTldExpanded, isAdvancedExpanded, isColumnsExpanded]);
 
   // --- DOM Detection (Mount) ---
   useEffect(() => {
@@ -394,14 +398,14 @@ export default function Sidebar() {
                <h2 className="text-lg font-bold text-green-400">Domain Powertools</h2>
                <div className="flex gap-2">
                    <button onClick={() => setShowSettings(true)} className="text-slate-400 hover:text-white transition-colors cursor-pointer" title="Settings">
-                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 0 1 1.45.12l.773.774a1.125 1.125 0 0 1 .12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.894.15c.542.09.94.56.94 1.109v1.094c0 .55-.398 1.02-.94 1.11l-.894.149c-.424.07-.764.383-.929.78-.165.398-.143.854.107 1.204l.527.738a1.125 1.125 0 0 1-.12 1.45l-.773.773a1.125 1.125 0 0 1-1.45.12l-.737-.527c-.35-.25-.806-.272-1.204-.107-.398.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527a1.125 1.125 0 0 1-1.45-.12l-.773-.774a1.125 1.125 0 0 1-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.108-1.204l-.526-.738a1.125 1.125 0 0 1 .12-1.45l.773-.773a1.125 1.125 0 0 1 1.45-.12l.737.527c.35.25.807.272 1.204.107.398-.165.71-.505.78-.929l.15-.894Z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg>
+                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 0 1 1.45.12l.773.774a1.125 1.125 0 0 1 .12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.894.15c.542.09.94.56.94 1.109v1.094c0 .55-.398 1.02-.94 1.11l-.894.149c-.424.07-.764.383-.929.78-.165.398-.143.854.107 1.204l.527.738a1.125 1.125 0 0 1-.12 1.45l-.773.773a1.125 1.125 0 0 1-1.45.12l-.737-.527c-.35-.25-.806-.272-1.204-.107-.397.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527a1.125 1.125 0 0 1-1.45-.12l-.773-.774a1.125 1.125 0 0 1-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.108-1.204l-.526-.738a1.125 1.125 0 0 1 .12-1.45l.773-.773a1.125 1.125 0 0 1 1.45-.12l.737.527c.35.25.807.272 1.204.107.398-.165.71-.505.78-.929l.15-.894Z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg>
                    </button>
                    <button onClick={() => {
                        setFilters(DEFAULT_FILTERS); 
                        setHiddenColumns([]); 
                        setSortConfig({ column: '', direction: 'asc' }); 
                        setActivePresetName(''); 
-                       setIsHeatmapEnabled(false);
+                       // Feature toggles remain active (Heatmap and Presets are not disabled)
                        setIsNameExpanded(true);
                        setIsTldExpanded(false);
                        setIsAdvancedExpanded(false);
@@ -409,19 +413,21 @@ export default function Sidebar() {
                    }} className="text-xs text-slate-400 hover:text-white underline cursor-pointer">Reset</button>
                </div>
            </div>
-           <div className="flex gap-2">
-               {isSavingPreset ? (
-                   <div className="flex gap-1 w-full"><input type="text" value={newPresetName} onChange={(e) => setNewPresetName(e.target.value)} placeholder="Name" className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-white outline-none" autoFocus onKeyDown={(e) => e.key === 'Enter' && savePreset()}/><button onClick={savePreset} className="text-green-400 px-1 cursor-pointer">
-                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/></svg>
-                   </button><button onClick={() => setIsSavingPreset(false)} className="text-red-400 px-1 cursor-pointer">
-                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                   </button></div>
-               ) : (
-                   <><select value={activePresetName} onChange={(e) => { const p = presets.find(x => x.name === e.target.value); if (p) loadPreset(p); }} className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs cursor-pointer outline-none hover:bg-slate-750 transition-colors"><option value="">Load Preset...</option>{presets.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}</select><button onClick={() => setIsSavingPreset(true)} className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs hover:bg-slate-700 hover:text-green-400 cursor-pointer text-slate-400 transition-colors" title="Save Preset">
-                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 5h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2zm7 0v4m-3-4v4m6-4v4"/></svg>
-                   </button></>
-               )}
-           </div>
+           {isPresetsEnabled && (
+               <div className="flex gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                   {isSavingPreset ? (
+                       <div className="flex gap-1 w-full"><input type="text" value={newPresetName} onChange={(e) => setNewPresetName(e.target.value)} placeholder="Name" className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-white outline-none" autoFocus onKeyDown={(e) => e.key === 'Enter' && savePreset()}/><button onClick={savePreset} className="text-green-400 px-1 cursor-pointer">
+                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/></svg>
+                       </button><button onClick={() => setIsSavingPreset(false)} className="text-red-400 px-1 cursor-pointer">
+                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                       </button></div>
+                   ) : (
+                       <><select value={activePresetName} onChange={(e) => { const p = presets.find(x => x.name === e.target.value); if (p) loadPreset(p); }} className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs cursor-pointer outline-none hover:bg-slate-750 transition-colors"><option value="">Load Preset...</option>{presets.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}</select><button onClick={() => setIsSavingPreset(true)} className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs hover:bg-slate-700 hover:text-green-400 cursor-pointer text-slate-400 transition-colors" title="Save Preset">
+                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 5h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2zm7 0v4m-3-4v4m6-4v4"/></svg>
+                       </button></>
+                   )}
+               </div>
+           )}
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-6">
             <div className="space-y-2">
@@ -494,8 +500,7 @@ export default function Sidebar() {
                 </span></button>
                 {isTldExpanded && (
                     <div className="space-y-4">
-                        {detectedTlds.length > 0 && (<div className="space-y-2"><label className="text-xs text-slate-400">TLDs (Top 10)</label><div className="flex flex-wrap gap-1.5">{detectedTlds.map(({ tld, count }) => (<button key={tld} onClick={() => toggleTld(tld)} className={`px-2 py-1 rounded text-[10px] border cursor-pointer transition-all ${filters.tldFilter.split(',').map(s => s.trim()).includes(tld) ? 'bg-green-900/40 border-green-700 text-green-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500'}`}>.{tld} <span className="opacity-50 ml-1">{count}</span></button>))}
-</div></div>)}
+                        {detectedTlds.length > 0 && (<div className="space-y-2"><label className="text-xs text-slate-400">TLDs (Top 10)</label><div className="flex flex-wrap gap-1.5">{detectedTlds.map(({ tld, count }) => (<button key={tld} onClick={() => toggleTld(tld)} className={`px-2 py-1 rounded text-[10px] border cursor-pointer transition-all ${filters.tldFilter.split(',').map(s => s.trim()).includes(tld) ? 'bg-green-900/40 border-green-700 text-green-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500'}`}>.{tld} <span className="opacity-50 ml-1">{count}</span></button>))}</div></div>)}
                         {availableStatuses.length > 2 && (<div className="space-y-1"><label className="text-xs text-slate-400">Status</label><select value={filters.statusFilter} onChange={(e) => updateFilter('statusFilter', e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm outline-none cursor-pointer hover:bg-slate-750 transition-colors">{availableStatuses.map(s => <option key={s} value={s}>{s}</option>)}</select></div>)}
                     </div>
                 )}
@@ -521,6 +526,13 @@ export default function Sidebar() {
                 </span></button>
                 {isAdvancedExpanded && (
                     <div className="space-y-4 pt-2">
+                        <label className="flex items-center justify-between cursor-pointer group">
+                            <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">Enable Presets</span>
+                            <div className="relative">
+                                <input type="checkbox" checked={isPresetsEnabled} onChange={(e) => setIsPresetsEnabled(e.target.checked)} className="sr-only peer"/>
+                                <div className="w-8 h-4 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-600"></div>
+                            </div>
+                        </label>
                         <label className="flex items-center justify-between cursor-pointer group">
                             <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">Enable Heatmap</span>
                             <div className="relative">
@@ -550,17 +562,25 @@ export default function Sidebar() {
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button></div>
             <div className="flex-1 overflow-y-auto space-y-6">
-                <section><h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Saved Presets</h3>
-                    {presets.length === 0 ? <p className="text-sm text-slate-500 italic">None yet.</p> : (
-                        <div className="space-y-2">{presets.map((p, i) => (
-                            <div key={i} className="flex justify-between items-center bg-slate-800 p-3 rounded border border-slate-700"><span className="text-sm font-medium">{p.name}</span><button onClick={() => deletePreset(i)} className="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded bg-red-900/20 cursor-pointer transition-colors">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                            </button></div>
-                        ))}
-</div>
-                    )}
-                </section>
-                <section><h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Backup & Restore</h3><div className="flex gap-2"><button onClick={exportPresets} className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm py-2 px-4 rounded border border-slate-700 transition-colors cursor-pointer">Export</button><label className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm py-2 px-4 rounded border border-slate-700 text-center cursor-pointer transition-colors">Import<input type="file" accept=".json" onChange={importPresets} className="hidden"/></label></div></section>
+                {isPresetsEnabled ? (
+                    <>
+                        <section><h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Saved Presets</h3>
+                            {presets.length === 0 ? <p className="text-sm text-slate-500 italic">None yet.</p> : (
+                                <div className="space-y-2">{presets.map((p, i) => (
+                                    <div key={i} className="flex justify-between items-center bg-slate-800 p-3 rounded border border-slate-700"><span className="text-sm font-medium">{p.name}</span><button onClick={() => deletePreset(i)} className="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded bg-red-900/20 cursor-pointer transition-colors">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                    </button></div>
+                                ))}</div>
+                            )}
+                        </section>
+                        <section><h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Backup & Restore</h3><div className="flex gap-2"><button onClick={exportPresets} className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm py-2 px-4 rounded border border-slate-700 transition-colors cursor-pointer">Export</button><label className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm py-2 px-4 rounded border border-slate-700 text-center cursor-pointer transition-colors">Import<input type="file" accept=".json" onChange={importPresets} className="hidden"/></label></div></section>
+                    </>
+                ) : (
+                    <div className="flex flex-col items-center justify-center h-full text-center space-y-2 opacity-50">
+                        <svg className="w-12 h-12 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 0 1 1.45.12l.773.774a1.125 1.125 0 0 1 .12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.894.15c.542.09.94.56.94 1.109v1.094c0 .55-.398 1.02-.94 1.11l-.894.149c-.424.07-.764.383-.929.78-.165.398-.143.854.107 1.204l.527.738a1.125 1.125 0 0 1-.12 1.45l-.773.773a1.125 1.125 0 0 1-1.45.12l-.737-.527c-.35-.25-.806-.272-1.204-.107-.397.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527a1.125 1.125 0 0 1-1.45-.12l-.773-.774a1.125 1.125 0 0 1-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.108-1.204l-.526-.738a1.125 1.125 0 0 1 .12-1.45l.773-.773a1.125 1.125 0 0 1 1.45-.12l.737.527c.35.25.807.272 1.204.107.398-.165.71-.505.78-.929l.15-.894Z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg>
+                        <p className="text-sm">Additional settings will appear here in future updates.</p>
+                    </div>
+                )}
             </div>
         </div>
       )}
