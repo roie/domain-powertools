@@ -128,3 +128,55 @@ export const sortRows = (
       : valB.localeCompare(valA, undefined, { numeric: true, sensitivity: 'base' });
   });
 };
+
+export const getHeatColor = (className: string, value: string): string | null => {
+  const val = parseFloat(value.replace(/,/g, ''));
+  if (isNaN(val) || val <= 0) {
+    // Special check for Year (WBY/ABY) as they are > 0 but need a baseline
+    if (!className.includes('creationdate') && !className.includes('abirth')) return null;
+  }
+
+  const green = (opacity: number) => `rgba(16, 185, 129, ${opacity})`;
+
+  // SEO Metrics (TF, CF)
+  if (className.includes('majesticseo_tf') || className.includes('majesticseo_cf')) {
+    if (val >= 35) return green(0.4);
+    if (val >= 20) return green(0.2);
+    if (val >= 10) return green(0.1);
+  }
+
+  // Backlinks & Pop (BL, DP)
+  if (className.includes('field_bl') || className.includes('field_domainpop')) {
+    if (val >= 100000) return green(0.4);
+    if (val >= 10000) return green(0.2);
+    if (val >= 1000) return green(0.1);
+  }
+
+  // Length (Lower is better)
+  if (className.includes('field_length')) {
+    if (val < 4) return green(0.4);
+    if (val < 6) return green(0.2);
+    if (val < 10) return green(0.1);
+  }
+
+  // Age (Creation Date / Archive Birth)
+  if (className.includes('field_creationdate') || className.includes('field_abirth')) {
+    if (val < 1996) return green(0.4);
+    if (val < 2005) return green(0.2);
+    if (val < 2015) return green(0.1);
+  }
+
+  // Registered TLDs / Related
+  if (className.includes('field_statustld_registered') || className.includes('field_related_cnobi')) {
+    if (val >= 15) return green(0.4);
+    if (val >= 8) return green(0.2);
+    if (val >= 3) return green(0.1);
+  }
+
+  // Wikipedia (Premium)
+  if (className.includes('field_wikipedia_links')) {
+    if (val > 0) return green(0.3);
+  }
+
+  return null;
+};

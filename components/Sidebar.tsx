@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { browser } from 'wxt/browser';
-import { FilterState, filterDomain, sortRows } from './FilterEngine';
+import { FilterState, filterDomain, sortRows, getHeatColor } from './FilterEngine';
 
 interface ColumnDef {
   label: string;
@@ -50,11 +50,15 @@ export default function Sidebar() {
   const [isSavingPreset, setIsSavingPreset] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState('');
   
+  // --- Feature States ---
+  const [isHeatmapEnabled, setIsHeatmapEnabled] = useState(false);
+
   // --- Collapsible UI States ---
   const [isNameExpanded, setIsNameExpanded] = useState(true);
   const [isTldExpanded, setIsTldExpanded] = useState(false);
   const [isAdvancedExpanded, setIsAdvancedExpanded] = useState(false);
   const [isColumnsExpanded, setIsColumnsExpanded] = useState(false);
+  const [isVisualsExpanded, setIsVisualsExpanded] = useState(false);
 
   // --- Persistence Logic ---
   const isLoaded = useRef(false);
@@ -73,7 +77,8 @@ export default function Sidebar() {
                 'dpt_presets', 
                 'dpt_active_preset', 
                 'dpt_hidden_columns', 
-                'dpt_sort_config'
+                'dpt_sort_config',
+                'dpt_heatmap'
             ]);
             
             if (res.dpt_filters) setFilters(res.dpt_filters);
@@ -81,6 +86,7 @@ export default function Sidebar() {
             if (res.dpt_active_preset) setActivePresetName(res.dpt_active_preset);
             if (res.dpt_hidden_columns) setHiddenColumns(res.dpt_hidden_columns);
             if (res.dpt_sort_config) setSortConfig(res.dpt_sort_config);
+            if (res.dpt_heatmap !== undefined) setIsHeatmapEnabled(res.dpt_heatmap);
             
         } catch (e) {
             console.error("Domain Powertools: Failed to load settings", e);
@@ -102,12 +108,13 @@ export default function Sidebar() {
             dpt_presets: presets,
             dpt_active_preset: activePresetName,
             dpt_hidden_columns: hiddenColumns,
-            dpt_sort_config: sortConfig
+            dpt_sort_config: sortConfig,
+            dpt_heatmap: isHeatmapEnabled
         });
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [filters, presets, activePresetName, hiddenColumns, sortConfig]);
+  }, [filters, presets, activePresetName, hiddenColumns, sortConfig, isHeatmapEnabled]);
 
   // --- DOM Detection (Mount) ---
   useEffect(() => {
@@ -122,7 +129,7 @@ export default function Sidebar() {
       const headClass = Array.from(th.classList).find(c => c.startsWith('head_'));
       if (!headClass || headClass === 'head_watchlist' || headClass === 'head_domain') return;
       const fieldClass = headClass.replace('head_', 'field_');
-      cols.push({ 
+      cols.push({
         label: th.querySelector('a')?.textContent?.trim() || th.textContent?.trim() || '?', 
         className: fieldClass, 
         tooltip: th.querySelector('a')?.getAttribute('title') || '' 
@@ -163,6 +170,7 @@ export default function Sidebar() {
     if (!tbody || originalRowsRef.current.length === 0) return;
     let rows = [...originalRowsRef.current];
     let count = 0;
+
     rows.forEach((row) => {
       const domainLink = row.querySelector('td:first-child a'); 
       const statusCell = row.querySelector('td.field_whois');
@@ -172,11 +180,26 @@ export default function Sidebar() {
       const isVisible = filterDomain(domainName, statusText, filters);
       row.style.display = isVisible ? '' : 'none';
       if (isVisible) count++;
+
+      // Apply Heatmap
+      const cells = row.querySelectorAll('td');
+      cells.forEach(cell => {
+          if (!isHeatmapEnabled) {
+              cell.style.backgroundColor = '';
+              return;
+          }
+          const className = Array.from(cell.classList).find(c => c.startsWith('field_'));
+          if (className) {
+              const color = getHeatColor(className, cell.textContent?.trim() || '');
+              cell.style.backgroundColor = color || '';
+          }
+      });
     });
+
     setVisibleCount(count);
     if (sortConfig.column) rows = sortRows(rows, sortConfig.column, sortConfig.direction);
     rows.forEach(row => tbody.appendChild(row));
-  }, [filters, sortConfig]);
+  }, [filters, sortConfig, isHeatmapEnabled]);
 
   useEffect(() => {
     const styleId = 'domain-powertools-col-styles';
@@ -187,7 +210,7 @@ export default function Sidebar() {
       document.head.appendChild(styleTag);
     }
     const hiddenRules = hiddenColumns.map(c => `table.base1 th.${c.replace('field_', 'head_')}, table.base1 td.${c} { display: none !important; }`).join('\n');
-    let highlightRule = sortConfig.column ? `table.base1 td.${sortConfig.column} { background-color: rgba(71, 85, 105, 0.2) !important; border-left: 1px solid rgba(148, 163, 184, 0.2) !important; border-right: 1px solid rgba(148, 163, 184, 0.2) !important; }` : '';
+    let highlightRule = sortConfig.column ? `table.base1 td.${sortConfig.column} { border-left: 2px solid rgba(148, 163, 184, 0.4) !important; border-right: 2px solid rgba(148, 163, 184, 0.4) !important; }` : '';
     styleTag.textContent = hiddenRules + '\n' + highlightRule;
   }, [hiddenColumns, sortConfig.column]);
 
@@ -219,7 +242,13 @@ export default function Sidebar() {
 
   const savePreset = () => {
     if (!newPresetName.trim()) return;
-    setPresets(prev => [...prev, { name: newPresetName, filters: { ...filters }, hiddenColumns: [...hiddenColumns], sortConfig: { ...sortConfig } }]);
+    const newPreset: Preset = {
+        name: newPresetName,
+        filters: { ...filters },
+        hiddenColumns: [...hiddenColumns],
+        sortConfig: { ...sortConfig }
+    };
+    setPresets(prev => [...prev, newPreset]);
     setActivePresetName(newPresetName);
     setNewPresetName('');
     setIsSavingPreset(false);
@@ -269,11 +298,11 @@ export default function Sidebar() {
     if (!tbody) return;
     const visibleRows = Array.from(tbody.querySelectorAll('tr')).filter(r => (r as HTMLElement).style.display !== 'none') as HTMLTableRowElement[];
     const exportCols = [{ label: 'Domain', className: 'field_domain' }, ...columns.filter(col => !hiddenColumns.includes(col.className))];
-    const csvRows = [exportCols.map(c => `"${c.label}"`).join(',')];
+    const csvRows = [exportCols.map(c => '"' + c.label + '"').join(',')];
     
     visibleRows.forEach(row => {
       const rowData = exportCols.map(col => {
-        const cell = row.querySelector(`td.${col.className}`);
+        const cell = row.querySelector('td.' + col.className);
         if (!cell) return '""';
 
         let val = '';
@@ -285,7 +314,8 @@ export default function Sidebar() {
           tempCell.querySelectorAll('ul, .kmenucontent, style, script').forEach(el => el.remove());
           val = tempCell.textContent?.trim() || ''; 
         }
-        return `"${val.split('"').join('""')}"`;
+        // Escape quotes by joining with double quotes
+        return '"' + val.split('"').join('""') + '"';
       });
       csvRows.push(rowData.join(','));
     });
@@ -294,7 +324,7 @@ export default function Sidebar() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `domain_powertools_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', 'domain_powertools_export_' + new Date().toISOString().split('T')[0] + '.csv');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -316,7 +346,7 @@ export default function Sidebar() {
                {isSavingPreset ? (
                    <div className="flex gap-1 w-full"><input type="text" value={newPresetName} onChange={(e) => setNewPresetName(e.target.value)} placeholder="Name" className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-white outline-none" autoFocus onKeyDown={(e) => e.key === 'Enter' && savePreset()}/><button onClick={savePreset} className="text-green-400 px-1 cursor-pointer">✓</button><button onClick={() => setIsSavingPreset(false)} className="text-red-400 px-1 cursor-pointer">✕</button></div>
                ) : (
-                   <><select value={activePresetName} onChange={(e) => { const p = presets.find(x => x.name === e.target.value); if (p) loadPreset(p); }} className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs cursor-pointer outline-none hover:bg-slate-750 transition-colors"><option value="">Load Preset...</option>{presets.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}</select><button onClick={() => setIsSavingPreset(true)} className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs hover:bg-slate-700 hover:text-green-400 cursor-pointer text-slate-400 transition-colors" title="Save Preset">💾</button></>
+                   <><select value={activePresetName} onChange={(e) => { const p = presets.find(x => x.name === e.target.value); if (p) loadPreset(p); }} className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-xs cursor-pointer outline-none hover:bg-slate-750 transition-colors"><option value="">Load Preset...</option>{presets.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}</select><button onClick={() => setIsSavingPreset(true)} className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs hover:bg-slate-700 hover:text-green-400 cursor-pointer text-slate-400 transition-colors" title="Save Preset">💾</button></>
                )}
            </div>
         </div>
@@ -348,6 +378,22 @@ export default function Sidebar() {
                     </div>
                 )}
             </section>
+
+            <section className="space-y-2">
+                <button onClick={() => setIsVisualsExpanded(!isVisualsExpanded)} className="w-full flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wider cursor-pointer px-2 py-2 rounded bg-slate-800/30 hover:bg-slate-800 transition-colors"><span>Visuals</span><span>{isVisualsExpanded ? '−' : '+'}</span></button>
+                {isVisualsExpanded && (
+                    <div className="p-2 space-y-3">
+                        <label className="flex items-center justify-between cursor-pointer group">
+                            <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">Enable Heatmap</span>
+                            <div className="relative">
+                                <input type="checkbox" checked={isHeatmapEnabled} onChange={(e) => setIsHeatmapEnabled(e.target.checked)} className="sr-only peer"/>
+                                <div className="w-8 h-4 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-green-600"></div>
+                            </div>
+                        </label>
+                    </div>
+                )}
+            </section>
+
             <section className="space-y-2">
                 <button onClick={() => setIsColumnsExpanded(!isColumnsExpanded)} className="w-full flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wider cursor-pointer px-2 py-2 rounded bg-slate-800/30 hover:bg-slate-800 transition-colors"><span>Toggle Columns</span><span>{isColumnsExpanded ? '−' : '+'}</span></button>
                 {isColumnsExpanded && (<div className="grid grid-cols-2 gap-2 p-1">{columns.map(col => (<button key={col.className} onClick={() => { setHiddenColumns(prev => prev.includes(col.className) ? prev.filter(c => c !== col.className) : [...prev, col.className]); setActivePresetName(''); }} title={col.tooltip} className={`text-[10px] py-1.5 px-2 rounded border truncate cursor-pointer transition-all ${hiddenColumns.includes(col.className) ? 'bg-red-900/20 border-red-900 text-slate-600' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-slate-200'}`}>{col.label}</button>))}</div>)}
