@@ -114,14 +114,15 @@ export const sortRows = (
     const cellA = a.querySelector(`td.${columnClass}`);
     const cellB = b.querySelector(`td.${columnClass}`);
 
-    const valA = cellA?.textContent?.trim() || '';
-    const valB = cellB?.textContent?.trim() || '';
+    const rawA = cellA?.textContent?.trim() || '';
+    const rawB = cellB?.textContent?.trim() || '';
 
-    // Attempt to parse as number (remove commas/k/m if necessary, but simple parseFloat is usually enough for basic tables)
-    // Some columns might have "2.5k" or "1,000", simple parseFloat stops at commas often or handles them poorly if not cleaned.
-    // For EDN, usually just numbers or simple text.
-    const numA = parseFloat(valA.replace(/,/g, ''));
-    const numB = parseFloat(valB.replace(/,/g, ''));
+    // Treat '-' or empty strings as 0 for numeric sorting
+    const cleanA = (rawA === '-' || rawA === '') ? '0' : rawA;
+    const cleanB = (rawB === '-' || rawB === '') ? '0' : rawB;
+
+    const numA = parseFloat(cleanA.replace(/,/g, ''));
+    const numB = parseFloat(cleanB.replace(/,/g, ''));
 
     const isNumA = !isNaN(numA);
     const isNumB = !isNaN(numB);
@@ -131,8 +132,8 @@ export const sortRows = (
     }
 
     return direction === 'asc' 
-      ? valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' })
-      : valB.localeCompare(valA, undefined, { numeric: true, sensitivity: 'base' });
+      ? rawA.localeCompare(rawB, undefined, { numeric: true, sensitivity: 'base' })
+      : rawB.localeCompare(rawA, undefined, { numeric: true, sensitivity: 'base' });
   });
 };
 
