@@ -242,7 +242,9 @@ export default function Sidebar() {
 
     setVisibleCount(count);
     if (sortConfig.column) rows = sortRows(rows, sortConfig.column, sortConfig.direction);
-    rows.forEach(row => tbody.appendChild(row));
+    const fragment = document.createDocumentFragment();
+    rows.forEach(row => fragment.appendChild(row));
+    tbody.appendChild(fragment);
   }, [filters, sortConfig, isHeatmapEnabled]);
 
   useEffect(() => {
@@ -270,7 +272,7 @@ export default function Sidebar() {
     updateFilter('tldFilter', next.join(', '));
   };
 
-  const copyVisible = () => {
+  const copyVisible = async () => {
     const domains: string[] = [];
     document.querySelectorAll(`${TABLE_SELECTOR} tbody tr`).forEach(row => {
       if ((row as HTMLElement).style.display !== 'none') {
@@ -279,8 +281,12 @@ export default function Sidebar() {
         if (d) domains.push(d.trim());
       }
     });
-    navigator.clipboard.writeText(domains.join('\n'));
-    setCopyFeedback(`Copied ${domains.length}!`);
+    try {
+      await navigator.clipboard.writeText(domains.join('\n'));
+      setCopyFeedback(`Copied ${domains.length}!`);
+    } catch (e) {
+      setCopyFeedback('Copy failed!');
+    }
     setTimeout(() => setCopyFeedback(''), 2000);
   };
 
@@ -341,10 +347,23 @@ export default function Sidebar() {
         try {
             const imported = JSON.parse(ev.target?.result as string);
             if (Array.isArray(imported)) {
-                setPresets(prev => [...prev, ...imported]);
-                alert('Presets imported!');
+                // Validate preset structure before importing
+                const isValidPreset = (p: unknown): p is Preset =>
+                    typeof p === 'object' && p !== null &&
+                    typeof (p as Preset).name === 'string' &&
+                    typeof (p as Preset).filters === 'object' && (p as Preset).filters !== null;
+
+                const validPresets = imported.filter(isValidPreset);
+                if (validPresets.length === 0) {
+                    alert('No valid presets found in file.');
+                    return;
+                }
+                setPresets(prev => [...prev, ...validPresets]);
+                alert(`Imported ${validPresets.length} preset(s)!`);
+            } else {
+                alert('Invalid file format: expected an array of presets.');
             }
-        } catch (err) { alert('Invalid file.'); }
+        } catch (err) { alert('Invalid JSON file.'); }
     };
     reader.readAsText(file);
   };
@@ -385,6 +404,7 @@ export default function Sidebar() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   return (

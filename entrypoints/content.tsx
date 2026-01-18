@@ -9,7 +9,6 @@ export default defineContentScript({
   cssInjectionMode: 'ui',
 
   async main(ctx) {
-    console.log('Domain Powertools: Content script loaded.');
 
     // Helper to wait for the table
     const waitForTable = () => {
@@ -36,11 +35,8 @@ export default defineContentScript({
 
     const table = await waitForTable();
     if (!table) {
-      console.log('Domain Powertools: Table not found on this page. Sidebar skipped.');
       return;
     }
-
-    console.log('Domain Powertools: Table detected. Mounting sidebar...');
 
     const ui = await createShadowRootUi(ctx, {
       name: 'domain-powertools-sidebar',
