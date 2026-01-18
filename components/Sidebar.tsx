@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { browser } from 'wxt/browser';
 import { FilterState, filterDomain, sortRows, getHeatColor } from './FilterEngine';
 
+const TABLE_SELECTOR = '#listing table.base1';
+
 interface ColumnDef {
   label: string;
   className: string;
@@ -118,12 +120,12 @@ export default function Sidebar() {
 
   // --- DOM Detection (Mount) ---
   useEffect(() => {
-    const tbody = document.querySelector('table.base1 tbody');
+    const tbody = document.querySelector(`${TABLE_SELECTOR} tbody`);
     if (tbody) {
         originalRowsRef.current = Array.from(tbody.querySelectorAll('tr')) as HTMLTableRowElement[];
     }
 
-    const headers = document.querySelectorAll('table.base1 thead th');
+    const headers = document.querySelectorAll(`${TABLE_SELECTOR} thead th`);
     const cols: ColumnDef[] = [];
     headers.forEach((th) => {
       const headClass = Array.from(th.classList).find(c => c.startsWith('head_'));
@@ -141,7 +143,7 @@ export default function Sidebar() {
     const statusSet = new Set<string>();
     const tldMap = new Map<string, number>();
     rows.forEach(row => {
-        const domainLink = row.querySelector('td:first-child a');
+        const domainLink = row.querySelector('td.field_domain a');
         if (domainLink) {
             const fullDomain = domainLink.getAttribute('title')?.trim() || domainLink.textContent?.trim() || '';
             const parts = fullDomain.split('.');
@@ -166,13 +168,13 @@ export default function Sidebar() {
   }, [isCollapsed]);
 
   useEffect(() => {
-    const tbody = document.querySelector('table.base1 tbody');
+    const tbody = document.querySelector(`${TABLE_SELECTOR} tbody`);
     if (!tbody || originalRowsRef.current.length === 0) return;
     let rows = [...originalRowsRef.current];
     let count = 0;
 
     rows.forEach((row) => {
-      const domainLink = row.querySelector('td:first-child a'); 
+      const domainLink = row.querySelector('td.field_domain a'); 
       const statusCell = row.querySelector('td.field_whois');
       if (!domainLink) return;
       const domainName = domainLink.getAttribute('title')?.trim() || domainLink.textContent?.trim() || '';
@@ -209,8 +211,8 @@ export default function Sidebar() {
       styleTag.id = styleId;
       document.head.appendChild(styleTag);
     }
-    const hiddenRules = hiddenColumns.map(c => `table.base1 th.${c.replace('field_', 'head_')}, table.base1 td.${c} { display: none !important; }`).join('\n');
-    let highlightRule = sortConfig.column ? `table.base1 td.${sortConfig.column} { border-left: 2px solid rgba(148, 163, 184, 0.4) !important; border-right: 2px solid rgba(148, 163, 184, 0.4) !important; }` : '';
+    const hiddenRules = hiddenColumns.map(c => `${TABLE_SELECTOR} th.${c.replace('field_', 'head_')}, ${TABLE_SELECTOR} td.${c} { display: none !important; }`).join('\n');
+    let highlightRule = sortConfig.column ? `${TABLE_SELECTOR} td.${sortConfig.column} { border-left: 2px solid rgba(148, 163, 184, 0.4) !important; border-right: 2px solid rgba(148, 163, 184, 0.4) !important; }` : '';
     styleTag.textContent = hiddenRules + '\n' + highlightRule;
   }, [hiddenColumns, sortConfig.column]);
 
@@ -228,9 +230,9 @@ export default function Sidebar() {
 
   const copyVisible = () => {
     const domains: string[] = [];
-    document.querySelectorAll('table.base1 tbody tr').forEach(row => {
+    document.querySelectorAll(`${TABLE_SELECTOR} tbody tr`).forEach(row => {
       if ((row as HTMLElement).style.display !== 'none') {
-        const link = row.querySelector('td:first-child a');
+        const link = row.querySelector('td.field_domain a');
         const d = link?.getAttribute('title') || link?.textContent;
         if (d) domains.push(d.trim());
       }
@@ -294,7 +296,7 @@ export default function Sidebar() {
   };
 
   const exportToCSV = () => {
-    const tbody = document.querySelector('table.base1 tbody');
+    const tbody = document.querySelector(`${TABLE_SELECTOR} tbody`);
     if (!tbody) return;
     const visibleRows = Array.from(tbody.querySelectorAll('tr')).filter(r => (r as HTMLElement).style.display !== 'none') as HTMLTableRowElement[];
     const exportCols = [{ label: 'Domain', className: 'field_domain' }, ...columns.filter(col => !hiddenColumns.includes(col.className))];
@@ -314,7 +316,6 @@ export default function Sidebar() {
           tempCell.querySelectorAll('ul, .kmenucontent, style, script').forEach(el => el.remove());
           val = tempCell.textContent?.trim() || ''; 
         }
-        // Escape quotes by joining with double quotes
         return '"' + val.split('"').join('""') + '"';
       });
       csvRows.push(rowData.join(','));
@@ -346,7 +347,7 @@ export default function Sidebar() {
                {isSavingPreset ? (
                    <div className="flex gap-1 w-full"><input type="text" value={newPresetName} onChange={(e) => setNewPresetName(e.target.value)} placeholder="Name" className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-white outline-none" autoFocus onKeyDown={(e) => e.key === 'Enter' && savePreset()}/><button onClick={savePreset} className="text-green-400 px-1 cursor-pointer">✓</button><button onClick={() => setIsSavingPreset(false)} className="text-red-400 px-1 cursor-pointer">✕</button></div>
                ) : (
-                   <><select value={activePresetName} onChange={(e) => { const p = presets.find(x => x.name === e.target.value); if (p) loadPreset(p); }} className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-xs cursor-pointer outline-none hover:bg-slate-750 transition-colors"><option value="">Load Preset...</option>{presets.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}</select><button onClick={() => setIsSavingPreset(true)} className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs hover:bg-slate-700 hover:text-green-400 cursor-pointer text-slate-400 transition-colors" title="Save Preset">💾</button></>
+                   <><select value={activePresetName} onChange={(e) => { const p = presets.find(x => x.name === e.target.value); if (p) loadPreset(p); }} className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs cursor-pointer outline-none hover:bg-slate-750 transition-colors"><option value="">Load Preset...</option>{presets.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}</select><button onClick={() => setIsSavingPreset(true)} className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs hover:bg-slate-700 hover:text-green-400 cursor-pointer text-slate-400 transition-colors" title="Save Preset">💾</button></>
                )}
            </div>
         </div>
@@ -373,7 +374,8 @@ export default function Sidebar() {
                 <button onClick={() => setIsTldExpanded(!isTldExpanded)} className="w-full flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wider cursor-pointer px-2 py-2 rounded bg-slate-800/30 hover:bg-slate-800 transition-colors"><span>TLD & Status</span><span>{isTldExpanded ? '−' : '+'}</span></button>
                 {isTldExpanded && (
                     <div className="space-y-4">
-                        {detectedTlds.length > 0 && (<div className="space-y-2"><label className="text-xs text-slate-400">TLDs (Top 10)</label><div className="flex flex-wrap gap-1.5">{detectedTlds.map(({ tld, count }) => (<button key={tld} onClick={() => toggleTld(tld)} className={`px-2 py-1 rounded text-[10px] border cursor-pointer transition-all ${filters.tldFilter.split(',').map(s => s.trim()).includes(tld) ? 'bg-green-900/40 border-green-700 text-green-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500'}`}>.{tld} <span className="opacity-50 ml-1">{count}</span></button>))}</div></div>)}
+                        {detectedTlds.length > 0 && (<div className="space-y-2"><label className="text-xs text-slate-400">TLDs (Top 10)</label><div className="flex flex-wrap gap-1.5">{detectedTlds.map(({ tld, count }) => (<button key={tld} onClick={() => toggleTld(tld)} className={`px-2 py-1 rounded text-[10px] border cursor-pointer transition-all ${filters.tldFilter.split(',').map(s => s.trim()).includes(tld) ? 'bg-green-900/40 border-green-700 text-green-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500'}`}>.{tld} <span className="opacity-50 ml-1">{count}</span></button>))}
+</div></div>)}
                         {availableStatuses.length > 2 && (<div className="space-y-1"><label className="text-xs text-slate-400">Status</label><select value={filters.statusFilter} onChange={(e) => updateFilter('statusFilter', e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm outline-none cursor-pointer hover:bg-slate-750 transition-colors">{availableStatuses.map(s => <option key={s} value={s}>{s}</option>)}</select></div>)}
                     </div>
                 )}
@@ -396,7 +398,8 @@ export default function Sidebar() {
 
             <section className="space-y-2">
                 <button onClick={() => setIsColumnsExpanded(!isColumnsExpanded)} className="w-full flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wider cursor-pointer px-2 py-2 rounded bg-slate-800/30 hover:bg-slate-800 transition-colors"><span>Toggle Columns</span><span>{isColumnsExpanded ? '−' : '+'}</span></button>
-                {isColumnsExpanded && (<div className="grid grid-cols-2 gap-2 p-1">{columns.map(col => (<button key={col.className} onClick={() => { setHiddenColumns(prev => prev.includes(col.className) ? prev.filter(c => c !== col.className) : [...prev, col.className]); setActivePresetName(''); }} title={col.tooltip} className={`text-[10px] py-1.5 px-2 rounded border truncate cursor-pointer transition-all ${hiddenColumns.includes(col.className) ? 'bg-red-900/20 border-red-900 text-slate-600' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-slate-200'}`}>{col.label}</button>))}</div>)}
+                {isColumnsExpanded && (<div className="grid grid-cols-2 gap-2 p-1">{columns.map(col => (<button key={col.className} onClick={() => { setHiddenColumns(prev => prev.includes(col.className) ? prev.filter(c => c !== col.className) : [...prev, col.className]); setActivePresetName(''); }} title={col.tooltip} className={`text-[10px] py-1.5 px-2 rounded border truncate cursor-pointer transition-all ${hiddenColumns.includes(col.className) ? 'bg-red-900/20 border-red-900 text-slate-600' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-slate-200'}`}>{col.label}</button>))}
+</div>)}
             </section>
             <section className="space-y-2">
                 <button onClick={() => setIsAdvancedExpanded(!isAdvancedExpanded)} className="w-full flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wider cursor-pointer px-2 py-2 rounded bg-slate-800/30 hover:bg-slate-800 transition-colors"><span>Advanced Filters</span><span>{isAdvancedExpanded ? '−' : '+'}</span></button>
@@ -427,8 +430,7 @@ export default function Sidebar() {
                         <div className="space-y-2">{presets.map((p, i) => (
                             <div key={i} className="flex justify-between items-center bg-slate-800 p-3 rounded border border-slate-700"><span className="text-sm font-medium">{p.name}</span><button onClick={() => deletePreset(i)} className="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded bg-red-900/20 cursor-pointer transition-colors">Delete</button></div>
                         ))}
-                        </div>
-                    )}
+</div>)}
                 </section>
                 <section><h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Backup & Restore</h3><div className="flex gap-2"><button onClick={exportPresets} className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm py-2 px-4 rounded border border-slate-700 transition-colors cursor-pointer">Export</button><label className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm py-2 px-4 rounded border border-slate-700 text-center cursor-pointer transition-colors">Import<input type="file" accept=".json" onChange={importPresets} className="hidden"/></label></div></section>
             </div>
