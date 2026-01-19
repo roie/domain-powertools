@@ -103,6 +103,41 @@ export const filterDomain = (
   return true;
 };
 
+const extractMetricValue = (cell: Element | null): number => {
+  if (!cell) return 0;
+
+  // 1. Priority: Check 'title' attribute on link (<a>) or the cell (<td>) itself.
+  // This usually contains the exact, unformatted number (e.g., "34,300,000" vs "34.3 M").
+  const link = cell.querySelector('a');
+  const titleVal = link?.getAttribute('title') || cell.getAttribute('title');
+
+  if (titleVal) {
+    // Remove commas and spaces to parse pure numbers
+    const cleanTitle = titleVal.replace(/[, ]/g, '');
+    const num = parseFloat(cleanTitle);
+    if (!isNaN(num)) return num;
+  }
+
+  // 2. Fallback: Parse visible text (Handling K/M/B suffixes)
+  const text = cell.textContent?.trim() || '';
+  if (!text || text === '-') return 0;
+
+  const lower = text.toLowerCase();
+  let multiplier = 1;
+
+  if (lower.endsWith('b')) multiplier = 1000000000;
+  else if (lower.endsWith('m')) multiplier = 1000000;
+  else if (lower.endsWith('k')) multiplier = 1000;
+
+  // Remove non-numeric characters (except dot and minus) to parse the base number
+  // e.g., "34.3 M" -> "34.3"
+  const cleanText = text.replace(/[^0-9.-]/g, '');
+  const num = parseFloat(cleanText);
+
+  if (isNaN(num)) return 0;
+  return num * multiplier;
+};
+
 export const sortRows = (
   rows: HTMLTableRowElement[], 
   columnClass: string, 
@@ -114,26 +149,10 @@ export const sortRows = (
     const cellA = a.querySelector(`td.${columnClass}`);
     const cellB = b.querySelector(`td.${columnClass}`);
 
-    const rawA = cellA?.textContent?.trim() || '';
-    const rawB = cellB?.textContent?.trim() || '';
+    const valA = extractMetricValue(cellA);
+    const valB = extractMetricValue(cellB);
 
-    // Treat '-' or empty strings as 0 for numeric sorting
-    const cleanA = (rawA === '-' || rawA === '') ? '0' : rawA;
-    const cleanB = (rawB === '-' || rawB === '') ? '0' : rawB;
-
-    const numA = parseFloat(cleanA.replace(/,/g, ''));
-    const numB = parseFloat(cleanB.replace(/,/g, ''));
-
-    const isNumA = !isNaN(numA);
-    const isNumB = !isNaN(numB);
-
-    if (isNumA && isNumB) {
-      return direction === 'asc' ? numA - numB : numB - numA;
-    }
-
-    return direction === 'asc' 
-      ? rawA.localeCompare(rawB, undefined, { numeric: true, sensitivity: 'base' })
-      : rawB.localeCompare(rawA, undefined, { numeric: true, sensitivity: 'base' });
+    return direction === 'asc' ? valA - valB : valB - valA;
   });
 };
 
