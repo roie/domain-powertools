@@ -799,7 +799,7 @@ export default function Sidebar() {
                 )}
 
                 {/* About Section */}
-                <section className="border-t border-slate-800 pt-6">
+                <section className="border-t border-slate-700 pt-6">
                     <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">About</h3>
                     <div className="space-y-4">
                         <div className="flex items-center gap-3">
@@ -807,7 +807,9 @@ export default function Sidebar() {
                                 <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
                             </div>
                             <div>
-                                <div className="text-sm font-semibold text-white">Domain Powertools</div>
+                                <div className="text-lg font-bold tracking-tight">
+                                    <span className="text-white">Domain</span> <span className="text-emerald-400">Powertools</span>
+                                </div>
                                 <div className="text-xs text-slate-500">Version 1.0.0</div>
                             </div>
                         </div>
