@@ -541,6 +541,7 @@ export default function Sidebar() {
                      onClick={() => setIsCollapsed(true)}
                      className="p-1.5 ml-3 text-slate-500 hover:text-emerald-400 hover:bg-slate-800 rounded-md transition-colors cursor-pointer"
                      title="Close sidebar"
+                     aria-label="Close sidebar"
                    >
                      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12"/>
@@ -838,8 +839,12 @@ export default function Sidebar() {
         </div>
       )}
       <div
-        className={`h-full flex flex-col items-center justify-between py-6 bg-slate-900 ${isCollapsed ? 'flex cursor-pointer hover:bg-slate-800/50 transition-colors' : 'hidden'}`}
+        className={`h-full flex flex-col items-center justify-between py-6 bg-slate-900 ${isCollapsed ? 'cursor-pointer hover:bg-slate-800/50 transition-colors' : 'hidden'}`}
         onClick={() => setIsCollapsed(false)}
+        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setIsCollapsed(false)}
+        tabIndex={isCollapsed ? 0 : -1}
+        role="button"
+        aria-label="Expand sidebar"
         title="Click to expand"
       >
         {/* Full vertical branding text - matching expanded header styling */}
