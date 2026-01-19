@@ -506,29 +506,46 @@ export default function Sidebar() {
     URL.revokeObjectURL(url);
   };
 
+  const resetAllFilters = () => {
+    setFilters(DEFAULT_FILTERS);
+    setHiddenColumns([]);
+    setSortConfig({ column: '', direction: 'asc' });
+    setActivePresetName('');
+    setIsNameExpanded(true);
+    setIsTldExpanded(false);
+    setIsAdvancedExpanded(false);
+    setIsColumnsExpanded(false);
+  };
+
   return (
     <div className={`fixed top-0 right-0 h-full bg-slate-900 text-slate-100 shadow-2xl z-[9999] border-l border-slate-700 font-sans transition-all duration-300 ease-in-out ${isCollapsed ? 'w-12' : 'w-80'}`}>
-      <button onClick={() => setIsCollapsed(!isCollapsed)} className="absolute top-4 left-0 -ml-5 bg-slate-800 border border-slate-600 text-emerald-400 p-1.5 rounded-l-lg w-8 h-12 flex items-center justify-center cursor-pointer shadow-lg transition-all duration-200 hover:bg-slate-700 hover:border-emerald-500/50 hover:text-emerald-300 hover:shadow-emerald-900/20">
-        <svg className={`w-4 h-4 transition-transform duration-300 ${isCollapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/></svg>
-      </button>
       <div className={`flex flex-col h-full ${isCollapsed ? 'hidden' : 'flex'}`}>
         <div className="p-4 flex-shrink-0 bg-slate-900 z-10 border-b border-slate-700">
            <div className="flex justify-between items-center mb-3">
-               <h2 className="text-lg font-bold tracking-tight"><span className="text-white">Domain</span><span className="text-emerald-400">Powertools</span></h2>
-               <div className="flex gap-2">
-                   <button onClick={() => setShowSettings(true)} className="text-slate-400 hover:text-white transition-colors cursor-pointer" title="Settings">
+               <h2 className="text-lg font-bold tracking-tight"><span className="text-white">Domain</span> <span className="text-emerald-400">Powertools</span></h2>
+               <div className="flex items-center">
+                   <div className="flex items-center gap-1">
+                     <button onClick={resetAllFilters}
+                       className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md transition-colors cursor-pointer"
+                       title="Reset all filters">
+                         <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                           <path strokeLinecap="round" strokeLinejoin="round"
+                             d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"/>
+                         </svg>
+                     </button>
+                     <button onClick={() => setShowSettings(true)} className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md transition-colors cursor-pointer" title="Settings">
                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 0 1 1.45.12l.773.774a1.125 1.125 0 0 1 .12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.894.15c.542.09.94.56.94 1.109v1.094c0 .55-.398 1.02-.94 1.11l-.894.149c-.424.07-.764.383-.929.78-.165.398-.143.854.107 1.204l.527.738a1.125 1.125 0 0 1-.12 1.45l-.773.773a1.125 1.125 0 0 1-1.45.12l-.737-.527c-.35-.25-.806-.272-1.204-.107-.397.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527a1.125 1.125 0 0 1-1.45-.12l-.773-.774a1.125 1.125 0 0 1-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.108-1.204l-.526-.738a1.125 1.125 0 0 1 .12-1.45l.773-.773a1.125 1.125 0 0 1 1.45-.12l.737.527c.35.25.807.272 1.204.107.398-.165.71-.505.78-.929l.15-.894Z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg>
+                     </button>
+                   </div>
+                   <button
+                     onClick={() => setIsCollapsed(true)}
+                     className="p-1.5 ml-3 text-slate-500 hover:text-emerald-400 hover:bg-slate-800 rounded-md transition-colors cursor-pointer"
+                     title="Close sidebar"
+                   >
+                     <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12"/>
+                     </svg>
                    </button>
-                   <button onClick={() => {
-                       setFilters(DEFAULT_FILTERS);
-                       setHiddenColumns([]);
-                       setSortConfig({ column: '', direction: 'asc' });
-                       setActivePresetName('');
-                       setIsNameExpanded(true);
-                       setIsTldExpanded(false);
-                       setIsAdvancedExpanded(false);
-                       setIsColumnsExpanded(false);
-                   }} className="text-xs text-slate-400 hover:text-white underline cursor-pointer">Reset</button>
                </div>
            </div>
            {isPresetsEnabled && (
@@ -821,10 +838,21 @@ export default function Sidebar() {
         </div>
       )}
       <div
-        className={`h-full flex flex-col items-center pt-8 bg-slate-900 ${isCollapsed ? 'block cursor-pointer hover:bg-slate-800 transition-colors' : 'hidden'}`}
+        className={`h-full flex flex-col items-center justify-between py-6 bg-slate-900 ${isCollapsed ? 'flex cursor-pointer hover:bg-slate-800/50 transition-colors' : 'hidden'}`}
         onClick={() => setIsCollapsed(false)}
+        title="Click to expand"
       >
-        <span className="text-emerald-400 font-bold text-sm vertical-text tracking-[0.25em] uppercase opacity-90">DPT</span>
+        {/* Full vertical branding text - matching expanded header styling */}
+        <h2 className="text-lg font-bold tracking-tight vertical-text">
+          <span className="text-white">Domain</span> <span className="text-emerald-400">Powertools</span>
+        </h2>
+
+        {/* Expand hint icon at bottom - chevron-double-left */}
+        <div className="p-2 text-slate-500 hover:text-emerald-400 transition-colors">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M18.75 19.5l-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5"/>
+          </svg>
+        </div>
       </div>
       <style>{`
         .vertical-text { writing-mode: vertical-rl; transform: rotate(180deg); }
