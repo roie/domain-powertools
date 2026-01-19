@@ -70,6 +70,31 @@ export default function Sidebar() {
   const [isAdvancedExpanded, setIsAdvancedExpanded] = useState(false);
   const [isColumnsExpanded, setIsColumnsExpanded] = useState(false);
 
+  // --- Section Filter Counts ---
+  const nameFilterCount = useMemo(() => {
+    let count = 0;
+    if (filters.matchText) count++;
+    if (filters.blacklist) count++;
+    if (filters.startsWith) count++;
+    if (filters.endsWith) count++;
+    if (filters.minLength !== '') count++;
+    if (filters.maxLength !== '') count++;
+    if (filters.hyphenSetting !== 'any') count++;
+    if (filters.numberSetting !== 'any') count++;
+    return count;
+  }, [filters]);
+
+  const tldFilterCount = useMemo(() => {
+    let count = 0;
+    if (filters.tldFilter) count++;
+    if (filters.statusFilter !== 'Any') count++;
+    return count;
+  }, [filters]);
+
+  const advancedFilterCount = useMemo(() => {
+    return filters.pattern ? 1 : 0;
+  }, [filters]);
+
   // --- Persistence Logic ---
   const isLoaded = useRef(false);
   const originalRowsRef = useRef<HTMLTableRowElement[]>([]);
@@ -421,11 +446,10 @@ export default function Sidebar() {
                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 0 1 1.45.12l.773.774a1.125 1.125 0 0 1 .12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.894.15c.542.09.94.56.94 1.109v1.094c0 .55-.398 1.02-.94 1.11l-.894.149c-.424.07-.764.383-.929.78-.165.398-.143.854.107 1.204l.527.738a1.125 1.125 0 0 1-.12 1.45l-.773.773a1.125 1.125 0 0 1-1.45.12l-.737-.527c-.35-.25-.806-.272-1.204-.107-.397.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527a1.125 1.125 0 0 1-1.45-.12l-.773-.774a1.125 1.125 0 0 1-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.108-1.204l-.526-.738a1.125 1.125 0 0 1 .12-1.45l.773-.773a1.125 1.125 0 0 1 1.45-.12l.737.527c.35.25.807.272 1.204.107.398-.165.71-.505.78-.929l.15-.894Z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg>
                    </button>
                    <button onClick={() => {
-                       setFilters(DEFAULT_FILTERS); 
-                       setHiddenColumns([]); 
-                       setSortConfig({ column: '', direction: 'asc' }); 
-                       setActivePresetName(''); 
-                       // Feature toggles remain active (Heatmap and Presets are not disabled)
+                       setFilters(DEFAULT_FILTERS);
+                       setHiddenColumns([]);
+                       setSortConfig({ column: '', direction: 'asc' });
+                       setActivePresetName('');
                        setIsNameExpanded(true);
                        setIsTldExpanded(false);
                        setIsAdvancedExpanded(false);
@@ -477,7 +501,12 @@ export default function Sidebar() {
                 </div>
             </div>
             <section className="space-y-4">
-                <button onClick={() => setIsNameExpanded(!isNameExpanded)} className="w-full flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wider cursor-pointer px-2 py-2 rounded bg-slate-800/30 hover:bg-slate-800 transition-colors"><span>Name & Structure</span><span>
+                <button onClick={() => setIsNameExpanded(!isNameExpanded)} className="w-full flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wider cursor-pointer px-2 py-2 rounded bg-slate-800/30 hover:bg-slate-800 transition-colors">
+                    <span className="flex items-center gap-2">
+                        Name & Structure
+                        {!isNameExpanded && nameFilterCount > 0 && <span className="text-[10px] text-slate-500 font-normal normal-case">({nameFilterCount} active)</span>}
+                    </span>
+                    <span>
                     {isNameExpanded ? (
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4"/></svg>
                     ) : (
@@ -489,19 +518,21 @@ export default function Sidebar() {
                         <div className="space-y-1"><label className="text-xs text-slate-400">Length</label><div className="flex gap-2"><input type="number" placeholder="Min" value={filters.minLength} onChange={(e) => updateFilter('minLength', e.target.value)} className="w-1/2 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm outline-none focus:border-slate-500"/><input type="number" placeholder="Max" value={filters.maxLength} onChange={(e) => updateFilter('maxLength', e.target.value)} className="w-1/2 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm outline-none focus:border-slate-500"/></div></div>
                         
                         <div className="flex gap-2">
-                            <input 
-                                type="text" 
-                                value={filters.matchText} 
-                                onChange={(e) => updateFilter('matchText', e.target.value)} 
-                                className="w-1/2 bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm outline-none focus:border-green-500" 
-                                placeholder="Contains"
+                            <input
+                                type="text"
+                                value={filters.matchText}
+                                onChange={(e) => updateFilter('matchText', e.target.value)}
+                                className="w-1/2 bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm outline-none focus:border-green-500"
+                                placeholder="Contains (regex)"
+                                title="Supports regex, e.g., ^tech or (ai|ml)$"
                             />
-                            <input 
-                                type="text" 
-                                value={filters.blacklist} 
-                                onChange={(e) => updateFilter('blacklist', e.target.value)} 
-                                className="w-1/2 bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm outline-none focus:border-red-500" 
+                            <input
+                                type="text"
+                                value={filters.blacklist}
+                                onChange={(e) => updateFilter('blacklist', e.target.value)}
+                                className="w-1/2 bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm outline-none focus:border-red-500"
                                 placeholder="Exclude"
+                                title="Comma-separated words to exclude"
                             />
                         </div>
 
@@ -511,7 +542,12 @@ export default function Sidebar() {
                 )}
             </section>
             <section className="space-y-4">
-                <button onClick={() => setIsTldExpanded(!isTldExpanded)} className="w-full flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wider cursor-pointer px-2 py-2 rounded bg-slate-800/30 hover:bg-slate-800 transition-colors"><span>TLD & Status</span><span>
+                <button onClick={() => setIsTldExpanded(!isTldExpanded)} className="w-full flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wider cursor-pointer px-2 py-2 rounded bg-slate-800/30 hover:bg-slate-800 transition-colors">
+                    <span className="flex items-center gap-2">
+                        TLD & Status
+                        {!isTldExpanded && detectedTlds.length > 0 && <span className="text-[10px] text-slate-500 font-normal normal-case">({detectedTlds.length} TLDs{tldFilterCount > 0 ? `, ${tldFilterCount} active` : ''})</span>}
+                    </span>
+                    <span>
                     {isTldExpanded ? (
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4"/></svg>
                     ) : (
@@ -527,7 +563,12 @@ export default function Sidebar() {
             </section>
 
             <section className="space-y-2">
-                <button onClick={() => setIsColumnsExpanded(!isColumnsExpanded)} className="w-full flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wider cursor-pointer px-2 py-2 rounded bg-slate-800/30 hover:bg-slate-800 transition-colors"><span>Toggle Columns</span><span>
+                <button onClick={() => setIsColumnsExpanded(!isColumnsExpanded)} className="w-full flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wider cursor-pointer px-2 py-2 rounded bg-slate-800/30 hover:bg-slate-800 transition-colors">
+                    <span className="flex items-center gap-2">
+                        Toggle Columns
+                        {!isColumnsExpanded && hiddenColumns.length > 0 && <span className="text-[10px] text-slate-500 font-normal normal-case">({hiddenColumns.length} hidden)</span>}
+                    </span>
+                    <span>
                     {isColumnsExpanded ? (
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4"/></svg>
                     ) : (
@@ -537,7 +578,12 @@ export default function Sidebar() {
                 {isColumnsExpanded && (<div className="grid grid-cols-2 gap-2 p-1">{columns.map(col => (<button key={col.className} onClick={() => { setHiddenColumns(prev => prev.includes(col.className) ? prev.filter(c => c !== col.className) : [...prev, col.className]); setActivePresetName(''); }} title={col.tooltip} className={`text-[10px] py-1.5 px-2 rounded border truncate cursor-pointer transition-all ${hiddenColumns.includes(col.className) ? 'bg-red-900/20 border-red-900 text-slate-600' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-slate-200'}`}>{col.label}</button>))}</div>)}
             </section>
             <section className="space-y-2">
-                <button onClick={() => setIsAdvancedExpanded(!isAdvancedExpanded)} className="w-full flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wider cursor-pointer px-2 py-2 rounded bg-slate-800/30 hover:bg-slate-800 transition-colors"><span>Advanced</span><span>
+                <button onClick={() => setIsAdvancedExpanded(!isAdvancedExpanded)} className="w-full flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wider cursor-pointer px-2 py-2 rounded bg-slate-800/30 hover:bg-slate-800 transition-colors">
+                    <span className="flex items-center gap-2">
+                        Advanced
+                        {!isAdvancedExpanded && advancedFilterCount > 0 && <span className="text-[10px] text-slate-500 font-normal normal-case">({advancedFilterCount} active)</span>}
+                    </span>
+                    <span>
                     {isAdvancedExpanded ? (
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4"/></svg>
                     ) : (
@@ -560,7 +606,23 @@ export default function Sidebar() {
                                 <div className="w-8 h-4 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-green-600"></div>
                             </div>
                         </label>
-                        <div className="space-y-1"><label className="text-xs text-slate-400">Custom Pattern</label><input type="text" value={filters.pattern} onChange={(e) => updateFilter('pattern', e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-sm outline-none focus:border-green-500" placeholder="e.g. cvcv"/></div>
+                        <div className="space-y-1">
+                            <label className="text-xs text-slate-400 flex items-center gap-1">
+                                Custom Pattern
+                                <span className="relative group">
+                                    <svg className="w-3.5 h-3.5 text-slate-500 hover:text-slate-300 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                    <div className="absolute bottom-full left-0 mb-2 w-44 p-2 bg-slate-800 border border-slate-600 rounded-lg shadow-xl text-left text-[10px] text-slate-300 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 z-50">
+                                        <div className="font-semibold text-white mb-1">Pattern Characters:</div>
+                                        <div><span className="text-green-400 font-mono">c</span> = consonant</div>
+                                        <div><span className="text-green-400 font-mono">v</span> = vowel (a,e,i,o,u)</div>
+                                        <div><span className="text-green-400 font-mono">n</span> = number (0-9)</div>
+                                        <div><span className="text-green-400 font-mono">l</span> = any letter</div>
+                                        <div className="mt-1 text-slate-400">Ex: "cvcv" matches "doma"</div>
+                                    </div>
+                                </span>
+                            </label>
+                            <input type="text" value={filters.pattern} onChange={(e) => updateFilter('pattern', e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-sm outline-none focus:border-green-500" placeholder="e.g. cvcv, cvcc, llnn"/>
+                        </div>
                     </div>
                 )}
             </section>
@@ -604,7 +666,7 @@ export default function Sidebar() {
             </div>
         </div>
       )}
-      <div 
+      <div
         className={`h-full flex flex-col items-center pt-8 bg-slate-900 ${isCollapsed ? 'block cursor-pointer hover:bg-slate-800 transition-colors' : 'hidden'}`}
         onClick={() => setIsCollapsed(false)}
       >
