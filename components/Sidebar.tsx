@@ -327,8 +327,9 @@ export default function Sidebar() {
   };
 
   const toggleTld = (tld: string) => {
-    const current = filters.tldFilter.split(',').map(s => s.trim()).filter(Boolean);
-    const next = current.includes(tld) ? current.filter(t => t !== tld) : [...current, tld];
+    const target = tld.toLowerCase();
+    const current = filters.tldFilter.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    const next = current.includes(target) ? current.filter(t => t !== target) : [...current, target];
     updateFilter('tldFilter', next.join(', '));
   };
 
@@ -338,7 +339,7 @@ export default function Sidebar() {
     const tld = raw.startsWith('.') ? raw.slice(1) : raw;
     if (!tld) return;
 
-    const current = filters.tldFilter.split(',').map(s => s.trim()).filter(Boolean);
+    const current = filters.tldFilter.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
     if (!current.includes(tld)) {
       updateFilter('tldFilter', [...current, tld].join(', '));
     }
