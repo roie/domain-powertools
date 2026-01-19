@@ -1,47 +1,98 @@
 <!doctype html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Domain Powertools</title>
-        <style>
-            body {
-                width: 300px;
-                font-family:
-                    system-ui,
-                    -apple-system,
-                    sans-serif;
-                padding: 20px;
-                text-align: center;
-                background-color: #1a1a1a;
-                color: #ffffff;
-            }
-            h1 {
-                font-size: 18px;
-                color: #4ade80;
-            }
-            p {
-                font-size: 14px;
-                color: #9ca3af;
-                margin-top: 10px;
-            }
-            .status {
-                display: inline-block;
-                padding: 4px 12px;
-                background: #064e3b;
-                color: #6ee7b7;
-                border-radius: 99px;
-                font-size: 12px;
-                font-weight: bold;
-                margin-top: 15px;
-            }
-        </style>
-    </head>
-    <body>
-        <h1>Domain Powertools</h1>
-        <div class="status">ACTIVE</div>
-        <p>
-            Navigate to <b>expireddomains.net</b> to see the filtering sidebar.
-        </p>
-    </body>
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Domain Powertools</title>
+    <style>
+        body {
+            width: 280px;
+            font-family: system-ui, -apple-system, sans-serif;
+            padding: 24px;
+            background-color: #0f172a; /* slate-900 */
+            color: #f1f5f9; /* slate-100 */
+            margin: 0;
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .logo {
+            width: 40px;
+            height: 40px;
+            background: #059669; /* emerald-600 */
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .logo svg {
+            width: 24px;
+            height: 24px;
+            stroke: white;
+        }
+        .title {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.025em;
+        }
+        .title-domain { color: #ffffff; }
+        .title-powertools { color: #34d399; } /* emerald-400 */
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            background: rgba(5, 150, 105, 0.2); /* emerald-600/20 */
+            color: #34d399; /* emerald-400 */
+            border: 1px solid #059669; /* emerald-600 */
+            border-radius: 99px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 4px;
+        }
+        .description {
+            font-size: 13px;
+            color: #94a3b8; /* slate-400 */
+            line-height: 1.5;
+            margin: 0;
+        }
+        .description b {
+            color: #e2e8f0; /* slate-200 */
+        }
+        .footer {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #334155; /* slate-700 */
+            font-size: 10px;
+            color: #475569; /* slate-600 */
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">
+            <svg fill="none" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+            </svg>
+        </div>
+        <div>
+            <div class="title">
+                <span class="title-domain">Domain</span>
+                <span class="title-powertools">Powertools</span>
+            </div>
+            <div class="status">Active</div>
+        </div>
+    </div>
+    <p class="description">
+        Navigate to <b>expireddomains.net</b> to see the filtering sidebar.
+    </p>
+    <div class="footer">
+        Version 1.0.0
+    </div>
+</body>
 </html>
