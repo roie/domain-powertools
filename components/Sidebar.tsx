@@ -302,9 +302,16 @@ export default function Sidebar() {
 
     setVisibleCount(count);
     if (sortConfig.column) rows = sortRows(rows, sortConfig.column, sortConfig.direction);
-    const fragment = document.createDocumentFragment();
-    rows.forEach(row => fragment.appendChild(row));
-    tbody.appendChild(fragment);
+    
+    // Optimization: Only re-append rows if sorting is active OR if the DOM order is out of sync
+    const firstRow = tbody.firstElementChild;
+    const shouldReorder = sortConfig.column || (rows.length > 0 && firstRow !== rows[0]);
+
+    if (shouldReorder) {
+        const fragment = document.createDocumentFragment();
+        rows.forEach(row => fragment.appendChild(row));
+        tbody.appendChild(fragment);
+    }
   }, [filters, sortConfig, isHeatmapEnabled]);
 
   useEffect(() => {
