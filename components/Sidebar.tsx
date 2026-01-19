@@ -67,6 +67,8 @@ export default function Sidebar() {
   // --- Collapsible UI States ---
   const [isNameExpanded, setIsNameExpanded] = useState(true);
   const [isTldExpanded, setIsTldExpanded] = useState(false);
+  const [tldInput, setTldInput] = useState('');
+  const [showAllTlds, setShowAllTlds] = useState(false);
   const [isAdvancedExpanded, setIsAdvancedExpanded] = useState(false);
   const [isColumnsExpanded, setIsColumnsExpanded] = useState(false);
 
@@ -85,11 +87,8 @@ export default function Sidebar() {
   }, [filters]);
 
   const tldFilterCount = useMemo(() => {
-    let count = 0;
-    if (filters.tldFilter) count++;
-    if (filters.statusFilter !== 'Any') count++;
-    return count;
-  }, [filters]);
+    return filters.tldFilter.split(',').map(s => s.trim()).filter(Boolean).length;
+  }, [filters.tldFilter]);
 
   const advancedFilterCount = useMemo(() => {
     return filters.pattern ? 1 : 0;
@@ -224,7 +223,7 @@ export default function Sidebar() {
         if (statusText) statusSet.add(statusText.trim());
     });
     setAvailableStatuses(['Any', ...Array.from(statusSet).sort()]);
-    setDetectedTlds(Array.from(tldMap.entries()).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([tld, count]) => ({ tld, count })));
+    setDetectedTlds(Array.from(tldMap.entries()).sort((a, b) => b[1] - a[1]).map(([tld, count]) => ({ tld, count })));
   }, []);
 
   // --- Layout & Table Logic ---
@@ -296,6 +295,43 @@ export default function Sidebar() {
     const next = current.includes(tld) ? current.filter(t => t !== tld) : [...current, tld];
     updateFilter('tldFilter', next.join(', '));
   };
+
+  const addManualTld = () => {
+    const raw = tldInput.trim().toLowerCase();
+    if (!raw) return;
+    const tld = raw.startsWith('.') ? raw.slice(1) : raw;
+    if (!tld) return;
+
+    const current = filters.tldFilter.split(',').map(s => s.trim()).filter(Boolean);
+    if (!current.includes(tld)) {
+      updateFilter('tldFilter', [...current, tld].join(', '));
+    }
+    setTldInput('');
+  };
+
+  const allTldsToDisplay = useMemo(() => {
+    const activeTlds = filters.tldFilter.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    const activeSet = new Set(activeTlds);
+    
+    // Start with detected ones
+    const combined = [...detectedTlds];
+    
+    // Add any active ones that aren't in detected
+    activeTlds.forEach(tld => {
+        if (!combined.find(d => d.tld === tld)) {
+            combined.push({ tld, count: 0 });
+        }
+    });
+
+    // Sort: Active first, then by count desc
+    return combined.sort((a, b) => {
+        const aActive = activeSet.has(a.tld);
+        const bActive = activeSet.has(b.tld);
+        if (aActive && !bActive) return -1;
+        if (!aActive && bActive) return 1;
+        return b.count - a.count;
+    });
+  }, [detectedTlds, filters.tldFilter]);
 
   const copyVisible = async () => {
     const domains: string[] = [];
@@ -545,7 +581,11 @@ export default function Sidebar() {
                 <button onClick={() => setIsTldExpanded(!isTldExpanded)} className="w-full flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wider cursor-pointer px-2 py-2 rounded bg-slate-800/30 hover:bg-slate-800 transition-colors" title="Filter domains by top-level domain extension and availability status">
                     <span className="flex items-center gap-2">
                         TLD & Status
-                        {!isTldExpanded && detectedTlds.length > 0 && <span className="text-[10px] text-slate-500 font-normal normal-case">({detectedTlds.length} TLDs{tldFilterCount > 0 ? `, ${tldFilterCount} active` : ''})</span>}
+                        {!isTldExpanded && (
+                            <span className="text-[10px] text-slate-500 font-normal normal-case">
+                                ({detectedTlds.length} TLDs{tldFilterCount > 0 ? `, ${tldFilterCount} active` : ''})
+                            </span>
+                        )}
                     </span>
                     <span>
                     {isTldExpanded ? (
@@ -556,7 +596,42 @@ export default function Sidebar() {
                 </span></button>
                 {isTldExpanded && (
                     <div className="space-y-4">
-                        {detectedTlds.length > 0 && (<div className="space-y-2"><label className="text-xs text-slate-400">TLDs (Top 10)</label><div className="flex flex-wrap gap-1.5">{detectedTlds.map(({ tld, count }) => (<button key={tld} onClick={() => toggleTld(tld)} className={`px-2 py-1 rounded text-[10px] border cursor-pointer transition-all ${filters.tldFilter.split(',').map(s => s.trim()).includes(tld) ? 'bg-green-900/40 border-green-700 text-green-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500'}`}>.{tld} <span className="opacity-50 ml-1">{count}</span></button>))}</div></div>)}
+                         <div className="flex gap-2">
+                            <input 
+                                type="text" 
+                                value={tldInput} 
+                                onChange={(e) => setTldInput(e.target.value)} 
+                                onKeyDown={(e) => e.key === 'Enter' && addManualTld()}
+                                className="flex-1 bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm outline-none focus:border-green-500" 
+                                placeholder="Add TLD (e.g. io)"
+                                title="Type a TLD (e.g., 'com' or '.io') and press Enter to filter even if it's not on the current page."
+                            />
+                            <button onClick={addManualTld} className="px-3 py-1 bg-slate-800 border border-slate-700 rounded text-slate-400 hover:text-green-400 hover:border-green-500 transition-colors cursor-pointer" title="Add TLD to filter">
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                                </svg>
+                            </button>
+                        </div>
+                        {allTldsToDisplay.length > 0 && (
+                            <div className="space-y-2">
+                                <label className="text-xs text-slate-400">Active & Detected TLDs</label>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {(showAllTlds ? allTldsToDisplay : allTldsToDisplay.slice(0, 10)).map(({ tld, count }) => (
+                                        <button key={tld} onClick={() => toggleTld(tld)} className={`px-2 py-1 rounded text-[10px] border cursor-pointer transition-all ${filters.tldFilter.split(',').map(s => s.trim()).includes(tld) ? 'bg-green-900/40 border-green-700 text-green-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500'}`}>
+                                            .{tld} <span className="opacity-50 ml-1">{count > 0 ? count : (count === 0 ? '0' : '')}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                                {allTldsToDisplay.length > 10 && (
+                                    <button 
+                                        onClick={() => setShowAllTlds(!showAllTlds)} 
+                                        className="text-[10px] text-slate-500 hover:text-slate-300 underline cursor-pointer mt-1"
+                                    >
+                                        {showAllTlds ? 'Show less' : `Show ${allTldsToDisplay.length - 10} more TLDs...`}
+                                    </button>
+                                )}
+                            </div>
+                        )}
                         {availableStatuses.length > 2 && (<div className="space-y-1"><label className="text-xs text-slate-400">Status</label><select value={filters.statusFilter} onChange={(e) => updateFilter('statusFilter', e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm outline-none cursor-pointer hover:bg-slate-750 transition-colors" title="Filter by domain availability status">{availableStatuses.map(s => <option key={s} value={s}>{s}</option>)}</select></div>)}
                     </div>
                 )}
