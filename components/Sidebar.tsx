@@ -17,6 +17,7 @@ interface Preset {
   filters: FilterState;
   hiddenColumns: string[];
   sortConfig: { column: string; direction: 'asc' | 'desc' };
+  heatmapEnabled?: boolean;
   expansionState: {
     name: boolean;
     tld: boolean;
@@ -39,6 +40,28 @@ const DEFAULT_FILTERS: FilterState = {
   tldFilter: '',
   statusFilter: 'Any',
 };
+
+const DEFAULT_PRESET_LIST: Preset[] = [
+  {
+    name: "Quick Scan Mode",
+    filters: { ...DEFAULT_FILTERS, hyphenSetting: 'none', numberSetting: 'none', statusFilter: 'Available' },
+    hiddenColumns: [
+      'field_aentries', 'field_majestic_globalrank', 'field_dmoz', 
+      'field_statuscom', 'field_statusnet', 'field_statusorg', 'field_statusde', 'field_statusbiz', 'field_statusinfo', 'field_wikipedia_links', 'field_relatedlinks', 'field_changes'
+    ],
+    sortConfig: { column: '', direction: 'asc' },
+    heatmapEnabled: true,
+    expansionState: { name: false, tld: false, advanced: true, columns: false }
+  },
+  {
+    name: "Pronounceable Startups",
+    filters: { ...DEFAULT_FILTERS, minLength: '5', maxLength: '7', tldFilter: 'com, io, ai', pattern: 'cvcvcv', hyphenSetting: 'none', numberSetting: 'none', statusFilter: 'Available' },
+    hiddenColumns: [],
+    sortConfig: { column: '', direction: 'asc' },
+    heatmapEnabled: false,
+    expansionState: { name: true, tld: false, advanced: true, columns: false }
+  }
+];
 
 export default function Sidebar() {
   // --- Core State ---
@@ -121,11 +144,20 @@ export default function Sidebar() {
                 'dpt_exp_name',
                 'dpt_exp_tld',
                 'dpt_exp_adv',
-                'dpt_exp_cols'
+                'dpt_exp_cols',
+                'dpt_initialized'
             ]) as any;
             
             if (res.dpt_filters) setFilters(res.dpt_filters);
-            if (res.dpt_presets) setPresets(res.dpt_presets);
+            
+            // First Run Logic
+            if (!res.dpt_initialized) {
+                setPresets(DEFAULT_PRESET_LIST);
+                browser.storage.local.set({ dpt_initialized: true, dpt_presets: DEFAULT_PRESET_LIST });
+            } else {
+                if (res.dpt_presets) setPresets(res.dpt_presets);
+            }
+            
             if (res.dpt_active_preset) setActivePresetName(res.dpt_active_preset);
             if (res.dpt_hidden_columns) setHiddenColumns(res.dpt_hidden_columns);
             if (res.dpt_sort_config) setSortConfig(res.dpt_sort_config);
@@ -284,7 +316,7 @@ export default function Sidebar() {
       document.head.appendChild(styleTag);
     }
     const hiddenRules = hiddenColumns.map(c => `${TABLE_SELECTOR} th.${c.replace('field_', 'head_')}, ${TABLE_SELECTOR} td.${c} { display: none !important; }`).join('\n');
-    let highlightRule = sortConfig.column ? `${TABLE_SELECTOR} td.${sortConfig.column} { border-left: 2px solid rgba(148, 163, 184, 0.4) !important; border-right: 2px solid rgba(148, 163, 184, 0.4) !important; }` : '';
+    let highlightRule = sortConfig.column ? `${TABLE_SELECTOR} td.${sortConfig.column} { border-left: 2px solid rgba(148, 163, 184, 0.4) !important; border-right: 2px solid rgba(148, 163, 184, 0.4) !important; background-color: #e8e8e8; }` : '';
     styleTag.textContent = hiddenRules + '\n' + highlightRule;
   }, [hiddenColumns, sortConfig.column]);
 
@@ -362,6 +394,7 @@ export default function Sidebar() {
         filters: { ...filters },
         hiddenColumns: [...hiddenColumns],
         sortConfig: { ...sortConfig },
+        heatmapEnabled: isHeatmapEnabled,
         expansionState: {
             name: isNameExpanded,
             tld: isTldExpanded,
@@ -379,6 +412,7 @@ export default function Sidebar() {
     setFilters(p.filters);
     setHiddenColumns(p.hiddenColumns || []);
     setSortConfig(p.sortConfig || { column: '', direction: 'asc' });
+    if (p.heatmapEnabled !== undefined) setIsHeatmapEnabled(p.heatmapEnabled);
     if (p.expansionState) {
         setIsNameExpanded(p.expansionState.name);
         setIsTldExpanded(p.expansionState.tld);
