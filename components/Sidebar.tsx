@@ -91,8 +91,12 @@ export default function Sidebar() {
   }, [filters.tldFilter]);
 
   const advancedFilterCount = useMemo(() => {
-    return filters.pattern ? 1 : 0;
-  }, [filters]);
+    let count = 0;
+    if (filters.pattern) count++;
+    if (isHeatmapEnabled) count++;
+    if (isPresetsEnabled) count++;
+    return count;
+  }, [filters.pattern, isHeatmapEnabled, isPresetsEnabled]);
 
   // --- Persistence Logic ---
   const isLoaded = useRef(false);
