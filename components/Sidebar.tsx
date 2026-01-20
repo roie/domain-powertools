@@ -55,7 +55,7 @@ const DEFAULT_PRESET_LIST: Preset[] = [
   },
   {
     name: "Pronounceable Startups",
-    filters: { ...DEFAULT_FILTERS, minLength: '5', maxLength: '7', tldFilter: 'com, io, ai', pattern: 'cvcvcv', hyphenSetting: 'none', numberSetting: 'none', statusFilter: 'Available' },
+    filters: { ...DEFAULT_FILTERS, minLength: 5, maxLength: 7, tldFilter: 'com, io, ai', pattern: 'cvcvcv', hyphenSetting: 'none', numberSetting: 'none', statusFilter: 'Available' },
     hiddenColumns: [],
     sortConfig: { column: '', direction: 'asc' },
     heatmapEnabled: false,
