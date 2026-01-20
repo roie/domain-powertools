@@ -530,7 +530,7 @@ export default function Sidebar() {
       <div className={`flex flex-col h-full ${isCollapsed ? 'hidden' : 'flex'}`}>
         <div className="p-4 flex-shrink-0 bg-slate-900 z-10 border-b border-slate-700">
            <div className="flex justify-between items-center mb-3">
-               <h2 className="text-lg font-bold tracking-tight"><span className="text-white">Domain</span> <span className="text-emerald-400">Powertools</span></h2>
+               <h2 className="text-lg font-bold tracking-tight"><span className="text-white">Domain</span> <span className="text-teal-400">Powertools</span></h2>
                <div className="flex items-center">
                    <div className="flex items-center gap-1">
                      <button onClick={resetAllFilters}
@@ -547,7 +547,7 @@ export default function Sidebar() {
                    </div>
                    <button
                      onClick={() => setIsCollapsed(true)}
-                     className="p-1.5 ml-3 text-slate-500 hover:text-emerald-400 hover:bg-slate-800 rounded-md transition-colors cursor-pointer"
+                     className="p-1.5 ml-3 text-slate-500 hover:text-teal-400 hover:bg-slate-800 rounded-md transition-colors cursor-pointer"
                      title="Close sidebar"
                      aria-label="Close sidebar"
                    >
@@ -560,13 +560,13 @@ export default function Sidebar() {
            {isPresetsEnabled && (
                <div className="flex gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
                    {isSavingPreset ? (
-                       <div className="flex gap-1 w-full"><input type="text" value={newPresetName} onChange={(e) => setNewPresetName(e.target.value)} placeholder="Name" className="w-full bg-slate-800 border border-slate-700 rounded-md px-2 py-1 text-xs text-white outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors" autoFocus onKeyDown={(e) => e.key === 'Enter' && savePreset()}/><button onClick={savePreset} className="text-emerald-400 px-1 cursor-pointer hover:text-emerald-300 transition-colors">
+                       <div className="flex gap-1 w-full"><input type="text" value={newPresetName} onChange={(e) => setNewPresetName(e.target.value)} placeholder="Name" className="w-full bg-slate-800 border border-slate-700 rounded-md px-2 py-1 text-xs text-white outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-colors" autoFocus onKeyDown={(e) => e.key === 'Enter' && savePreset()}/><button onClick={savePreset} className="text-teal-400 px-1 cursor-pointer hover:text-teal-300 transition-colors">
                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/></svg>
                        </button><button onClick={() => setIsSavingPreset(false)} className="text-rose-400 px-1 cursor-pointer hover:text-rose-300 transition-colors">
                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
                        </button></div>
                    ) : (
-                       <><select value={activePresetName} onChange={(e) => { const p = presets.find(x => x.name === e.target.value); if (p) loadPreset(p); }} className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs cursor-pointer outline-none hover:bg-slate-700 transition-colors" title="Load a saved preset to apply its filters, sorting, and column settings"><option value="">Load Preset...</option>{presets.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}</select><button onClick={() => setIsSavingPreset(true)} className="bg-slate-800 border border-slate-700 rounded-md px-2 py-1 text-xs hover:bg-slate-700 hover:text-emerald-400 cursor-pointer text-slate-400 transition-colors" title="Save current filters, sorting, and column settings as a new preset">
+                       <><select value={activePresetName} onChange={(e) => { const p = presets.find(x => x.name === e.target.value); if (p) loadPreset(p); }} className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs cursor-pointer outline-none hover:bg-slate-700 transition-colors" title="Load a saved preset to apply its filters, sorting, and column settings"><option value="">Load Preset...</option>{presets.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}</select><button onClick={() => setIsSavingPreset(true)} className="bg-slate-800 border border-slate-700 rounded-md px-2 py-1 text-xs hover:bg-slate-700 hover:text-teal-400 cursor-pointer text-slate-400 transition-colors" title="Save current filters, sorting, and column settings as a new preset">
                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 5h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2zm7 0v4m-3-4v4m6-4v4"/></svg>
                        </button></>
                    )}
@@ -577,7 +577,7 @@ export default function Sidebar() {
             <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider px-1">Sort By</label>
                 <div className="flex gap-2">
-                    <select value={sortConfig.column} onChange={(e) => { setSortConfig(prev => ({ ...prev, column: e.target.value })); setActivePresetName(''); }} className="w-full bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-sm cursor-pointer outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors" title="Choose a column to sort the table by">
+                    <select value={sortConfig.column} onChange={(e) => { setSortConfig(prev => ({ ...prev, column: e.target.value })); setActivePresetName(''); }} className="w-full bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-sm cursor-pointer outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-colors" title="Choose a column to sort the table by">
                         <option value="">Default Order</option>
                         <option value="field_domain">Domain</option>
                         {columns.filter(col => !hiddenColumns.includes(col.className)).map(col => {
@@ -591,7 +591,7 @@ export default function Sidebar() {
                             );
                         })}
                     </select>
-                    {sortConfig.column && <button onClick={() => { setSortConfig(prev => ({ ...prev, direction: prev.direction === 'asc' ? 'desc' : 'asc' })); setActivePresetName(''); }} className="bg-slate-800 border border-slate-700 rounded-md px-3 py-1.5 text-sm font-bold cursor-pointer hover:bg-slate-700 text-emerald-400 transition-colors" title={`Currently ${sortConfig.direction === 'asc' ? 'ascending' : 'descending'}. Click to toggle.`}>
+                    {sortConfig.column && <button onClick={() => { setSortConfig(prev => ({ ...prev, direction: prev.direction === 'asc' ? 'desc' : 'asc' })); setActivePresetName(''); }} className="bg-slate-800 border border-slate-700 rounded-md px-3 py-1.5 text-sm font-bold cursor-pointer hover:bg-slate-700 text-teal-400 transition-colors" title={`Currently ${sortConfig.direction === 'asc' ? 'ascending' : 'descending'}. Click to toggle.`}>
                         {sortConfig.direction === 'asc' ? (
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7"/></svg>
                         ) : (
@@ -601,7 +601,7 @@ export default function Sidebar() {
                 </div>
             </div>
             <section className="space-y-4">
-                <button onClick={() => setIsNameExpanded(!isNameExpanded)} className="w-full flex justify-between items-center text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer px-3 py-2.5 rounded-lg bg-slate-800/50 hover:bg-slate-800 border-l-2 border-transparent hover:border-l-emerald-500 transition-all duration-200" title="Filter domains by name length, text content, prefixes, suffixes, hyphens, and numbers">
+                <button onClick={() => setIsNameExpanded(!isNameExpanded)} className="w-full flex justify-between items-center text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer px-3 py-2.5 rounded-lg bg-slate-800/50 hover:bg-slate-800 border-l-2 border-transparent hover:border-l-teal-500 transition-all duration-200" title="Filter domains by name length, text content, prefixes, suffixes, hyphens, and numbers">
                     <span className="flex items-center gap-2">
                         Name & Structure
                         {!isNameExpanded && nameFilterCount > 0 && <span className="text-[10px] text-slate-500 font-normal normal-case">({nameFilterCount} active)</span>}
@@ -615,14 +615,14 @@ export default function Sidebar() {
                 </span></button>
                 {isNameExpanded && (
                     <div className="space-y-4">
-                        <div className="space-y-1"><label className="text-xs text-slate-400">Length</label><div className="flex gap-2"><input type="number" placeholder="Min" value={filters.minLength} onChange={(e) => updateFilter('minLength', e.target.value)} className="w-1/2 bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors" title="Minimum domain name length (excluding TLD)"/><input type="number" placeholder="Max" value={filters.maxLength} onChange={(e) => updateFilter('maxLength', e.target.value)} className="w-1/2 bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors" title="Maximum domain name length (excluding TLD)"/></div></div>
+                        <div className="space-y-1"><label className="text-xs text-slate-400">Length</label><div className="flex gap-2"><input type="number" placeholder="Min" value={filters.minLength} onChange={(e) => updateFilter('minLength', e.target.value)} className="w-1/2 bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-colors" title="Minimum domain name length (excluding TLD)"/><input type="number" placeholder="Max" value={filters.maxLength} onChange={(e) => updateFilter('maxLength', e.target.value)} className="w-1/2 bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-colors" title="Maximum domain name length (excluding TLD)"/></div></div>
                         
                         <div className="flex gap-2">
                             <input
                                 type="text"
                                 value={filters.matchText}
                                 onChange={(e) => updateFilter('matchText', e.target.value)}
-                                className="w-1/2 bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors"
+                                className="w-1/2 bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-colors"
                                 placeholder="Contains (regex)"
                                 title="Supports regex, e.g., ^tech or (ai|ml)$"
                             />
@@ -636,13 +636,13 @@ export default function Sidebar() {
                             />
                         </div>
 
-                        <div className="flex gap-2"><input type="text" value={filters.startsWith} onChange={(e) => updateFilter('startsWith', e.target.value)} className="w-1/2 bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors" placeholder="Starts With" title="Show only domains that begin with this text"/><input type="text" value={filters.endsWith} onChange={(e) => updateFilter('endsWith', e.target.value)} className="w-1/2 bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors" placeholder="Ends With" title="Show only domains that end with this text (before the TLD)"/></div>
+                        <div className="flex gap-2"><input type="text" value={filters.startsWith} onChange={(e) => updateFilter('startsWith', e.target.value)} className="w-1/2 bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-colors" placeholder="Starts With" title="Show only domains that begin with this text"/><input type="text" value={filters.endsWith} onChange={(e) => updateFilter('endsWith', e.target.value)} className="w-1/2 bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-colors" placeholder="Ends With" title="Show only domains that end with this text (before the TLD)"/></div>
                         <div className="flex gap-2 pt-1"><div className="w-1/2 space-y-1"><label className="text-xs text-slate-400">Hyphens</label><select value={filters.hyphenSetting} onChange={(e) => updateFilter('hyphenSetting', e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm outline-none cursor-pointer hover:bg-slate-700 transition-colors" title="Filter by number of hyphens in domain name"><option value="any">Any</option><option value="none">None</option><option value="max1">Max 1</option><option value="max2">Max 2</option></select></div><div className="w-1/2 space-y-1"><label className="text-xs text-slate-400">Numbers</label><select value={filters.numberSetting} onChange={(e) => updateFilter('numberSetting', e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm outline-none cursor-pointer hover:bg-slate-700 transition-colors" title="Filter by digits in domain name"><option value="any">Any</option><option value="none">None</option><option value="max1">Max 1</option><option value="max2">Max 2</option><option value="only">Only</option></select></div></div>
                     </div>
                 )}
             </section>
             <section className="space-y-4">
-                <button onClick={() => setIsTldExpanded(!isTldExpanded)} className="w-full flex justify-between items-center text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer px-3 py-2.5 rounded-lg bg-slate-800/50 hover:bg-slate-800 border-l-2 border-transparent hover:border-l-emerald-500 transition-all duration-200" title="Filter domains by top-level domain extension and availability status">
+                <button onClick={() => setIsTldExpanded(!isTldExpanded)} className="w-full flex justify-between items-center text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer px-3 py-2.5 rounded-lg bg-slate-800/50 hover:bg-slate-800 border-l-2 border-transparent hover:border-l-teal-500 transition-all duration-200" title="Filter domains by top-level domain extension and availability status">
                     <span className="flex items-center gap-2">
                         TLD & Status
                         {!isTldExpanded && (
@@ -666,11 +666,11 @@ export default function Sidebar() {
                                 value={tldInput}
                                 onChange={(e) => setTldInput(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && addManualTld()}
-                                className="flex-1 bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors"
+                                className="flex-1 bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-colors"
                                 placeholder="Add TLD (e.g. io)"
                                 title="Type a TLD (e.g., 'com' or '.io') and press Enter to filter even if it's not on the current page."
                             />
-                            <button onClick={addManualTld} className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-md text-slate-400 hover:text-emerald-400 hover:border-emerald-500 transition-colors cursor-pointer" title="Add TLD to filter">
+                            <button onClick={addManualTld} className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-md text-slate-400 hover:text-teal-400 hover:border-teal-500 transition-colors cursor-pointer" title="Add TLD to filter">
                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                                 </svg>
@@ -681,7 +681,7 @@ export default function Sidebar() {
                                 <label className="text-xs text-slate-400">Active & Detected TLDs</label>
                                 <div className="flex flex-wrap gap-1.5">
                                     {(showAllTlds ? allTldsToDisplay : allTldsToDisplay.slice(0, 10)).map(({ tld, count }) => (
-                                        <button key={tld} onClick={() => toggleTld(tld)} className={`px-2.5 py-1 rounded-full text-xs font-medium border cursor-pointer transition-all duration-200 ${filters.tldFilter.split(',').map(s => s.trim()).includes(tld) ? 'bg-emerald-900/40 border-emerald-600 text-emerald-400 shadow-sm shadow-emerald-900/30' : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-300'}`}>
+                                        <button key={tld} onClick={() => toggleTld(tld)} className={`px-2.5 py-1 rounded-full text-xs font-medium border cursor-pointer transition-all duration-200 ${filters.tldFilter.split(',').map(s => s.trim()).includes(tld) ? 'bg-teal-900/40 border-teal-600 text-teal-400 shadow-sm shadow-teal-900/30' : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-300'}`}>
                                             .{tld} <span className="opacity-50 ml-1">{count > 0 ? count : (count === 0 ? '0' : '')}</span>
                                         </button>
                                     ))}
@@ -702,7 +702,7 @@ export default function Sidebar() {
             </section>
 
             <section className="space-y-2">
-                <button onClick={() => setIsColumnsExpanded(!isColumnsExpanded)} className="w-full flex justify-between items-center text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer px-3 py-2.5 rounded-lg bg-slate-800/50 hover:bg-slate-800 border-l-2 border-transparent hover:border-l-emerald-500 transition-all duration-200" title="Show or hide table columns to customize your view">
+                <button onClick={() => setIsColumnsExpanded(!isColumnsExpanded)} className="w-full flex justify-between items-center text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer px-3 py-2.5 rounded-lg bg-slate-800/50 hover:bg-slate-800 border-l-2 border-transparent hover:border-l-teal-500 transition-all duration-200" title="Show or hide table columns to customize your view">
                     <span className="flex items-center gap-2">
                         Toggle Columns
                         {!isColumnsExpanded && hiddenColumns.length > 0 && <span className="text-[10px] text-slate-500 font-normal normal-case">({hiddenColumns.length} hidden)</span>}
@@ -717,7 +717,7 @@ export default function Sidebar() {
                 {isColumnsExpanded && (<div className="grid grid-cols-2 gap-2 p-1">{columns.map(col => (<button key={col.className} onClick={() => { setHiddenColumns(prev => prev.includes(col.className) ? prev.filter(c => c !== col.className) : [...prev, col.className]); setActivePresetName(''); }} title={col.tooltip} className={`text-xs py-2 px-2.5 rounded-lg border truncate cursor-pointer transition-all duration-200 ${hiddenColumns.includes(col.className) ? 'bg-rose-900/20 border-rose-800 text-slate-500 line-through' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:border-slate-600'}`}>{col.label}</button>))}</div>)}
             </section>
             <section className="space-y-2">
-                <button onClick={() => setIsAdvancedExpanded(!isAdvancedExpanded)} className="w-full flex justify-between items-center text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer px-3 py-2.5 rounded-lg bg-slate-800/50 hover:bg-slate-800 border-l-2 border-transparent hover:border-l-emerald-500 transition-all duration-200" title="Enable presets, heatmap visualization, and custom pattern matching">
+                <button onClick={() => setIsAdvancedExpanded(!isAdvancedExpanded)} className="w-full flex justify-between items-center text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer px-3 py-2.5 rounded-lg bg-slate-800/50 hover:bg-slate-800 border-l-2 border-transparent hover:border-l-teal-500 transition-all duration-200" title="Enable presets, heatmap visualization, and custom pattern matching">
                     <span className="flex items-center gap-2">
                         Advanced
                         {!isAdvancedExpanded && advancedFilterCount > 0 && <span className="text-[10px] text-slate-500 font-normal normal-case">({advancedFilterCount} active)</span>}
@@ -735,14 +735,14 @@ export default function Sidebar() {
                             <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">Enable Presets</span>
                             <div className="relative">
                                 <input type="checkbox" checked={isPresetsEnabled} onChange={(e) => setIsPresetsEnabled(e.target.checked)} className="sr-only peer"/>
-                                <div className="w-8 h-4 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+                                <div className="w-8 h-4 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-teal-500"></div>
                             </div>
                         </label>
                         <label className="flex items-center justify-between cursor-pointer group" title="Color-code table cells based on metric values (green=good, red=poor)">
                             <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">Enable Heatmap</span>
                             <div className="relative">
                                 <input type="checkbox" checked={isHeatmapEnabled} onChange={(e) => setIsHeatmapEnabled(e.target.checked)} className="sr-only peer"/>
-                                <div className="w-8 h-4 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+                                <div className="w-8 h-4 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-teal-500"></div>
                             </div>
                         </label>
                         <div className="space-y-1">
@@ -752,15 +752,15 @@ export default function Sidebar() {
                                     <svg className="w-3.5 h-3.5 text-slate-500 hover:text-slate-300 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                     <div className="absolute bottom-full left-0 mb-2 w-44 p-2 bg-slate-800 border border-slate-600 rounded-lg shadow-xl text-left text-[10px] text-slate-300 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 z-50">
                                         <div className="font-semibold text-white mb-1">Pattern Characters:</div>
-                                        <div><span className="text-emerald-400 font-mono">c</span> = consonant</div>
-                                        <div><span className="text-emerald-400 font-mono">v</span> = vowel (a,e,i,o,u)</div>
-                                        <div><span className="text-emerald-400 font-mono">n</span> = number (0-9)</div>
-                                        <div><span className="text-emerald-400 font-mono">l</span> = any letter</div>
+                                        <div><span className="text-teal-400 font-mono">c</span> = consonant</div>
+                                        <div><span className="text-teal-400 font-mono">v</span> = vowel (a,e,i,o,u)</div>
+                                        <div><span className="text-teal-400 font-mono">n</span> = number (0-9)</div>
+                                        <div><span className="text-teal-400 font-mono">l</span> = any letter</div>
                                         <div className="mt-1 text-slate-400">Ex: "cvcv" matches "doma"</div>
                                     </div>
                                 </span>
                             </label>
-                            <input type="text" value={filters.pattern} onChange={(e) => updateFilter('pattern', e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors" placeholder="e.g. cvcv, cvcc, llnn"/>
+                            <input type="text" value={filters.pattern} onChange={(e) => updateFilter('pattern', e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-colors" placeholder="e.g. cvcv, cvcc, llnn"/>
                         </div>
                     </div>
                 )}
@@ -769,7 +769,7 @@ export default function Sidebar() {
         <div className="p-4 bg-gradient-to-t from-slate-800 to-slate-800/80 border-t border-slate-700 space-y-3">
              <div className="flex justify-between items-center"><span className="text-xs text-slate-500 font-medium">Results Found</span><span className="text-2xl font-bold text-white tabular-nums drop-shadow-[0_0_8px_rgba(16,185,129,0.3)]">{visibleCount}</span></div>
              <div className="flex gap-2">
-                <button onClick={copyVisible} disabled={!!copyFeedback || visibleCount === 0} className={`flex-1 font-semibold py-2.5 rounded-lg transition-all text-sm ${visibleCount === 0 ? 'bg-slate-700 text-slate-500 cursor-not-allowed shadow-none' : copyFeedback ? 'bg-emerald-700 text-white cursor-pointer shadow-lg shadow-emerald-900/30' : 'bg-emerald-600 hover:bg-emerald-500 text-white active:scale-[0.98] cursor-pointer shadow-lg shadow-emerald-900/30'}`} title={visibleCount === 0 ? 'No domains to copy' : 'Copy all visible domain names to clipboard'}>{copyFeedback || 'Copy Visible Domains'}</button>
+                <button onClick={copyVisible} disabled={!!copyFeedback || visibleCount === 0} className={`flex-1 font-semibold py-2.5 rounded-lg transition-all text-sm ${visibleCount === 0 ? 'bg-slate-700 text-slate-500 cursor-not-allowed shadow-none' : copyFeedback ? 'bg-teal-700 text-white cursor-pointer shadow-lg shadow-teal-900/30' : 'bg-teal-600 hover:bg-teal-500 text-white active:scale-[0.98] cursor-pointer shadow-lg shadow-teal-900/30'}`} title={visibleCount === 0 ? 'No domains to copy' : 'Copy all visible domain names to clipboard'}>{copyFeedback || 'Copy Visible Domains'}</button>
                 <button onClick={exportToCSV} disabled={visibleCount === 0} className={`p-2 rounded transition-all shadow-lg flex items-center justify-center min-w-[40px] ${visibleCount === 0 ? 'bg-slate-800 text-slate-600 cursor-not-allowed' : 'bg-slate-700 hover:bg-slate-600 text-white active:scale-95 cursor-pointer'}`} title={visibleCount === 0 ? 'No data to export' : 'Download visible rows as CSV file'}>
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
                 </button>
@@ -803,12 +803,12 @@ export default function Sidebar() {
                     <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">About</h3>
                     <div className="space-y-4">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-emerald-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <div className="w-10 h-10 bg-teal-600 rounded-lg flex items-center justify-center flex-shrink-0">
                                 <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
                             </div>
                             <div>
                                 <div className="text-lg font-bold tracking-tight">
-                                    <span className="text-white">Domain</span> <span className="text-emerald-400">Powertools</span>
+                                    <span className="text-white">Domain</span> <span className="text-teal-400">Powertools</span>
                                 </div>
                                 <div className="text-xs text-slate-500">Version 1.0.0</div>
                             </div>
@@ -834,7 +834,7 @@ export default function Sidebar() {
                         </div>
 
                         <div className="pt-2 flex flex-col gap-2">
-                            <a href="https://github.com/roie/domain-powertools/issues" target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors flex items-center gap-1">
+                            <a href="https://github.com/roie/domain-powertools/issues" target="_blank" rel="noopener noreferrer" className="text-xs text-teal-400 hover:text-teal-300 transition-colors flex items-center gap-1">
                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                 Report an Issue / Feedback
                             </a>
@@ -859,11 +859,11 @@ export default function Sidebar() {
       >
         {/* Full vertical branding text - matching expanded header styling */}
         <h2 className="text-lg font-bold tracking-tight vertical-text">
-          <span className="text-white">Domain</span> <span className="text-emerald-400">Powertools</span>
+          <span className="text-white">Domain</span> <span className="text-teal-400">Powertools</span>
         </h2>
 
         {/* Expand hint icon at bottom - chevron-double-left */}
-        <div className="p-2 text-slate-500 hover:text-emerald-400 transition-colors">
+        <div className="p-2 text-slate-500 hover:text-teal-400 transition-colors">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M18.75 19.5l-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5"/>
           </svg>
