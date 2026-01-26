@@ -548,7 +548,7 @@ export default function Sidebar() {
   };
 
   return (
-    <div className={`fixed top-0 right-0 h-full bg-slate-900 text-slate-100 shadow-2xl z-[9999] border-l border-slate-700 font-sans transition-all duration-300 ease-in-out ${isCollapsed ? 'w-12' : 'w-80'}`}>
+    <div className={`fixed top-0 right-0 h-full bg-slate-900 text-slate-100 shadow-2xl z-[2147483647] border-l border-slate-700 font-sans transition-all duration-300 ease-in-out ${isCollapsed ? 'w-12' : 'w-80'}`}>
       <div className={`flex flex-col h-full ${isCollapsed ? 'hidden' : 'flex'}`}>
         <div className="p-4 flex-shrink-0 bg-slate-900 z-10 border-b border-slate-700">
            <div className="flex justify-between items-center mb-3">
