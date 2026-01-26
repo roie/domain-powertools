@@ -424,7 +424,6 @@ export default function Sidebar() {
         filters: { ...filters },
         hiddenColumns: [...hiddenColumns],
         sortConfig: { ...sortConfig },
-        heatmapEnabled: isHeatmapEnabled,
         expansionState: {
             name: isNameExpanded,
             tld: isTldExpanded,
@@ -442,7 +441,6 @@ export default function Sidebar() {
     setFilters(p.filters);
     setHiddenColumns(p.hiddenColumns || []);
     setSortConfig(p.sortConfig || { column: '', direction: 'asc' });
-    if (p.heatmapEnabled !== undefined) setIsHeatmapEnabled(p.heatmapEnabled);
     if (p.expansionState) {
         setIsNameExpanded(p.expansionState.name);
         setIsTldExpanded(p.expansionState.tld);
