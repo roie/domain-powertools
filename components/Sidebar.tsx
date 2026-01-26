@@ -736,7 +736,17 @@ export default function Sidebar() {
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
                     )}
                 </span></button>
-                {isColumnsExpanded && (<div className="grid grid-cols-2 gap-2 p-1">{columns.map(col => (<button key={col.className} onClick={() => { setHiddenColumns(prev => prev.includes(col.className) ? prev.filter(c => c !== col.className) : [...prev, col.className]); setActivePresetName(''); }} title={col.tooltip} className={`text-xs py-2 px-2.5 rounded-lg border truncate cursor-pointer transition-all duration-200 ${hiddenColumns.includes(col.className) ? 'bg-rose-900/20 border-rose-800 text-slate-500 line-through' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:border-slate-600'}`}>{col.label}</button>))}</div>)}
+                {isColumnsExpanded && (<div className="grid grid-cols-2 gap-2 p-1">{columns.map(col => (<button key={col.className} onClick={() => { 
+                    setHiddenColumns(prev => {
+                        const next = prev.includes(col.className) ? prev.filter(c => c !== col.className) : [...prev, col.className];
+                        // If we are hiding the active sort column, reset sort to default
+                        if (sortConfig.column === col.className && !prev.includes(col.className)) {
+                            setSortConfig({ column: '', direction: 'asc' });
+                        }
+                        return next;
+                    }); 
+                    setActivePresetName(''); 
+                }} title={col.tooltip} className={`text-xs py-2 px-2.5 rounded-lg border truncate cursor-pointer transition-all duration-200 ${hiddenColumns.includes(col.className) ? 'bg-rose-900/20 border-rose-800 text-slate-500 line-through' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:border-slate-600'}`}>{col.label}</button>))}</div>)}
             </section>
             <section className="space-y-2">
                 <button onClick={() => setIsAdvancedExpanded(!isAdvancedExpanded)} className="w-full flex justify-between items-center text-xs font-semibold text-slate-400 uppercase tracking-wider cursor-pointer px-3 py-2.5 rounded-lg bg-slate-800/50 hover:bg-slate-800 border-l-2 border-transparent hover:border-l-teal-500 transition-all duration-200" title="Enable presets, heatmap visualization, and custom pattern matching">
