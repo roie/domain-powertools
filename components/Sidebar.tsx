@@ -117,6 +117,7 @@ export default function Sidebar() {
   const [isHeatmapEnabled, setIsHeatmapEnabled] = useState(false);
   const [isPresetsEnabled, setIsPresetsEnabled] = useState(false);
   const [tableVersion, setTableVersion] = useState(0);
+  const [isEnabled, setIsEnabled] = useState(true);
 
   // --- Collapsible UI States ---
   const [isNameExpanded, setIsNameExpanded] = useState(true);
@@ -176,10 +177,12 @@ export default function Sidebar() {
                 'dpt_exp_tld',
                 'dpt_exp_adv',
                 'dpt_exp_cols',
-                'dpt_initialized'
+                'dpt_initialized',
+                'dpt_enabled'
             ]) as any;
             
             if (res.dpt_filters) setFilters(res.dpt_filters);
+            if (res.dpt_enabled !== undefined) setIsEnabled(res.dpt_enabled);
             
             // First Run Logic
             if (!res.dpt_initialized) {
@@ -209,6 +212,13 @@ export default function Sidebar() {
         }
     };
     loadAll();
+
+    const listener = (msg: any, sender: any, sendResponse: any) => {
+        if (msg.type === 'DPT_POWER_TOGGLE') setIsEnabled(msg.enabled);
+        if (msg.type === 'DPT_STATUS_CHECK') sendResponse({ active: true });
+    };
+    browser.runtime.onMessage.addListener(listener);
+    return () => browser.runtime.onMessage.removeListener(listener);
   }, []);
 
   // 2. Unified Debounced Save
@@ -227,15 +237,17 @@ export default function Sidebar() {
             dpt_exp_name: isNameExpanded,
             dpt_exp_tld: isTldExpanded,
             dpt_exp_adv: isAdvancedExpanded,
-            dpt_exp_cols: isColumnsExpanded
+            dpt_exp_cols: isColumnsExpanded,
+            dpt_enabled: isEnabled
         });
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [filters, presets, activePresetName, hiddenColumns, sortConfig, isHeatmapEnabled, isPresetsEnabled, isNameExpanded, isTldExpanded, isAdvancedExpanded, isColumnsExpanded]);
+  }, [filters, presets, activePresetName, hiddenColumns, sortConfig, isHeatmapEnabled, isPresetsEnabled, isNameExpanded, isTldExpanded, isAdvancedExpanded, isColumnsExpanded, isEnabled]);
 
   // --- DOM Detection (Mount & MutationObserver) ---
   useEffect(() => {
+    if (!isEnabled) return;
     const scanTable = () => {
         const tbody = document.querySelector(`${TABLE_SELECTOR} tbody`);
         if (tbody) {
@@ -316,12 +328,17 @@ export default function Sidebar() {
 
   // --- Layout & Table Logic ---
   useEffect(() => {
+    if (!isEnabled) {
+        document.body.style.marginRight = '';
+        return;
+    }
     document.body.style.transition = 'margin-right 300ms cubic-bezier(0.4, 0, 0.2, 1)';
     document.body.style.marginRight = isCollapsed ? '48px' : '320px';
     return () => { document.body.style.marginRight = ''; };
-  }, [isCollapsed]);
+  }, [isCollapsed, isEnabled]);
 
   useEffect(() => {
+    if (!isEnabled) return;
     const tbody = document.querySelector(`${TABLE_SELECTOR} tbody`);
     if (!tbody || originalRowsRef.current.length === 0) return;
     let rows = [...originalRowsRef.current];
@@ -574,6 +591,8 @@ export default function Sidebar() {
     setIsAdvancedExpanded(false);
     setIsColumnsExpanded(false);
   };
+
+  if (!isEnabled) return null;
 
   return (
     <div className={`fixed top-0 right-0 h-full bg-slate-900 text-slate-100 shadow-2xl z-[2147483647] border-l border-slate-700 font-sans transition-all duration-300 ease-in-out ${isCollapsed ? 'w-12' : 'w-80'}`}>
