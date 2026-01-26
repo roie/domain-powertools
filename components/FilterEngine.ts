@@ -103,39 +103,89 @@ export const filterDomain = (
   return true;
 };
 
-const extractMetricValue = (cell: Element | null): number => {
+const extractSortValue = (cell: Element | null, columnClass: string = ''): number | string => {
   if (!cell) return 0;
 
-  // 1. Priority: Check 'title' attribute on link (<a>) or the cell (<td>) itself.
-  // This usually contains the exact, unformatted number (e.g., "34,300,000" vs "34.3 M").
+  // 1. Get raw values
   const link = cell.querySelector('a');
-  const titleVal = link?.getAttribute('title') || cell.getAttribute('title');
+  const titleVal = (link?.getAttribute('title') || cell.getAttribute('title') || '').trim();
+  const textVal = (cell.textContent || '').trim();
 
-  if (titleVal) {
-    // Remove commas and spaces to parse pure numbers
-    const cleanTitle = titleVal.replace(/[, ]/g, '');
-    const num = parseFloat(cleanTitle);
-    if (!isNaN(num)) return num;
+  // 2. Helper: Try to parse a string into a comparable Number (Timestamp or Value)
+  // Returns null if it cannot be strictly parsed as a number/date
+  const parseValue = (raw: string): number | null => {
+      if (!raw) return null;
+      const lower = raw.toLowerCase();
+
+      // A. Relative Dates (Today/Yesterday/X days)
+      if (lower.startsWith('today')) {
+        const timePart = lower.replace('today', '').trim();
+        return new Date().setHours(0,0,0,0) + (timePart ? parseInt(timePart.replace(':', '')) : 9999); 
+      }
+      if (lower.startsWith('yesterday')) {
+        const timePart = lower.replace('yesterday', '').trim();
+        return new Date(Date.now() - 86400000).setHours(0,0,0,0) + (timePart ? parseInt(timePart.replace(':', '')) : 9999);
+      }
+      const daysMatch = lower.match(/^(\d+)\s+days?$/);
+      if (daysMatch) {
+          const daysAgo = parseInt(daysMatch[1]);
+          return new Date(Date.now() - (daysAgo * 86400000)).setHours(0,0,0,0);
+      }
+
+      // B. Absolute Dates
+      // ISO (YYYY-MM-DD) - check start of string
+      if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
+        const date = Date.parse(raw);
+        if (!isNaN(date)) return date;
+      }
+      // European (DD.MM.YYYY)
+      if (/^\d{2}\.\d{2}\.\d{4}/.test(raw)) {
+          const parts = raw.split('.');
+          const date = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0])).getTime();
+          if (!isNaN(date)) return date;
+      }
+
+      // C. Numeric (with Suffixes)
+      const cleanStr = raw.replace(/[, $]/g, '');
+      const suffixMatch = cleanStr.match(/^([\d.]+)\s*([kmb])$/i);
+      if (suffixMatch) {
+        const val = parseFloat(suffixMatch[1]);
+        const suf = suffixMatch[2].toLowerCase();
+        if (suf === 'k') return val * 1000;
+        if (suf === 'm') return val * 1000000;
+        if (suf === 'b') return val * 1000000000;
+      }
+
+      // D. Strict Number
+      // Must be purely numeric (with optional dot/minus)
+      if (/^-?[\d,]+(\.\d+)?$/.test(cleanStr)) {
+        const num = parseFloat(cleanStr);
+        if (!isNaN(num)) return num;
+      }
+
+      return null;
+  };
+
+  // 3. Strategy Execution
+  
+  // Case I: Status Columns (Always Text Sort)
+  if (columnClass.includes('status') || columnClass.includes('whois')) {
+     return textVal.toLowerCase();
   }
 
-  // 2. Fallback: Parse visible text (Handling K/M/B suffixes)
-  const text = cell.textContent?.trim() || '';
-  if (!text || text === '-') return 0;
+  // Case II: Try Parsing Title (High Precision Metrics)
+  // e.g. Backlinks title="257,041" vs text="257.0 K" -> Title wins
+  const titleParsed = parseValue(titleVal);
+  if (titleParsed !== null) return titleParsed;
 
-  const lower = text.toLowerCase();
-  let multiplier = 1;
+  // Case III: Try Parsing Text (Fallback for Verbose Titles)
+  // e.g. related_cnobi title="2 Related..." (fails parse) vs text="2" (passes) -> Text wins
+  // e.g. enddate title="Date is..." (fails parse) vs text="2026-01-27" (passes) -> Text wins
+  const textParsed = parseValue(textVal);
+  if (textParsed !== null) return textParsed;
 
-  if (lower.endsWith('b')) multiplier = 1000000000;
-  else if (lower.endsWith('m')) multiplier = 1000000;
-  else if (lower.endsWith('k')) multiplier = 1000;
-
-  // Remove non-numeric characters (except dot and minus) to parse the base number
-  // e.g., "34.3 M" -> "34.3"
-  const cleanText = text.replace(/[^0-9.-]/g, '');
-  const num = parseFloat(cleanText);
-
-  if (isNaN(num)) return 0;
-  return num * multiplier;
+  // Case IV: Fallback to String Sort (Default to Text)
+  return textVal.toLowerCase() || titleVal.toLowerCase();
 };
 
 export const sortRows = (
@@ -149,10 +199,20 @@ export const sortRows = (
     const cellA = a.querySelector(`td.${columnClass}`);
     const cellB = b.querySelector(`td.${columnClass}`);
 
-    const valA = extractMetricValue(cellA);
-    const valB = extractMetricValue(cellB);
+    const valA = extractSortValue(cellA, columnClass);
+    const valB = extractSortValue(cellB, columnClass);
 
-    return direction === 'asc' ? valA - valB : valB - valA;
+    // Numeric Sort
+    if (typeof valA === 'number' && typeof valB === 'number') {
+        return direction === 'asc' ? valA - valB : valB - valA;
+    }
+
+    // String Sort
+    const strA = String(valA);
+    const strB = String(valB);
+    return direction === 'asc' 
+        ? strA.localeCompare(strB) 
+        : strB.localeCompare(strA);
   });
 };
 
