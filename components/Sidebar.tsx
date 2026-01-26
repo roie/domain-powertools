@@ -86,6 +86,7 @@ export default function Sidebar() {
   // --- Feature States ---
   const [isHeatmapEnabled, setIsHeatmapEnabled] = useState(false);
   const [isPresetsEnabled, setIsPresetsEnabled] = useState(false);
+  const [tableVersion, setTableVersion] = useState(0);
 
   // --- Collapsible UI States ---
   const [isNameExpanded, setIsNameExpanded] = useState(true);
@@ -203,63 +204,84 @@ export default function Sidebar() {
     return () => clearTimeout(timer);
   }, [filters, presets, activePresetName, hiddenColumns, sortConfig, isHeatmapEnabled, isPresetsEnabled, isNameExpanded, isTldExpanded, isAdvancedExpanded, isColumnsExpanded]);
 
-  // --- DOM Detection (Mount) ---
+  // --- DOM Detection (Mount & MutationObserver) ---
   useEffect(() => {
-    const tbody = document.querySelector(`${TABLE_SELECTOR} tbody`);
-    if (tbody) {
-        originalRowsRef.current = Array.from(tbody.querySelectorAll('tr')) as HTMLTableRowElement[];
-    }
-
-    const headers = document.querySelectorAll(`${TABLE_SELECTOR} thead th`);
-    const cols: ColumnDef[] = [];
-    headers.forEach((th) => {
-      const headClass = Array.from(th.classList).find(c => c.startsWith('head_'));
-      const label = th.querySelector('a')?.textContent?.trim() || th.textContent?.trim() || '?';
-      
-      // Skip RL (Related Links), watchlist, domain, and non-sortable utility columns
-      if (!headClass || headClass === 'head_watchlist' || headClass === 'head_domain' || headClass === 'head_relatedlinks' || label === 'RL') return;
-      
-      const fieldClass = headClass.replace('head_', 'field_');
-      cols.push({
-        label, 
-        className: fieldClass, 
-        tooltip: th.querySelector('a')?.getAttribute('title') || '' 
-      });
-    });
-    setColumns(cols);
-
-    const rows = originalRowsRef.current;
-    const statusSet = new Set<string>();
-    const tldMap = new Map<string, number>();
-    const variedColsSet = new Set<string>();
-    
-    // Check variation for each column
-    cols.forEach(col => {
-        const uniqueValues = new Set<string>();
-        rows.forEach(row => {
-            const val = row.querySelector(`td.${col.className}`)?.textContent?.trim() || '';
-            uniqueValues.add(val);
-        });
-        if (uniqueValues.size > 1) variedColsSet.add(col.className);
-    });
-    setVariedColumnClasses(Array.from(variedColsSet));
-
-    rows.forEach(row => {
-        const domainLink = row.querySelector(DOMAIN_LINK_SELECTOR);
-        if (domainLink) {
-            const fullDomain = domainLink.getAttribute('title')?.trim() || domainLink.textContent?.trim() || '';
-            const parts = fullDomain.split('.');
-            if (parts.length > 1) {
-                const tld = parts.slice(1).join('.');
-                tldMap.set(tld, (tldMap.get(tld) || 0) + 1);
-            }
+    const scanTable = () => {
+        const tbody = document.querySelector(`${TABLE_SELECTOR} tbody`);
+        if (tbody) {
+            originalRowsRef.current = Array.from(tbody.querySelectorAll('tr')) as HTMLTableRowElement[];
         }
-        const statusCell = row.querySelector(STATUS_CELL_SELECTOR);
-        const statusText = statusCell?.querySelector('a')?.textContent || statusCell?.textContent;
-        if (statusText) statusSet.add(statusText.trim());
+
+        const headers = document.querySelectorAll(`${TABLE_SELECTOR} thead th`);
+        const cols: ColumnDef[] = [];
+        headers.forEach((th) => {
+          const headClass = Array.from(th.classList).find(c => c.startsWith('head_'));
+          const label = th.querySelector('a')?.textContent?.trim() || th.textContent?.trim() || '?';
+          
+          if (!headClass || headClass === 'head_watchlist' || headClass === 'head_domain' || headClass === 'head_relatedlinks' || label === 'RL') return;
+          
+          const fieldClass = headClass.replace('head_', 'field_');
+          cols.push({
+            label, 
+            className: fieldClass, 
+            tooltip: th.querySelector('a')?.getAttribute('title') || '' 
+          });
+        });
+        setColumns(cols);
+
+        const rows = originalRowsRef.current;
+        const statusSet = new Set<string>();
+        const tldMap = new Map<string, number>();
+        const variedColsSet = new Set<string>();
+        
+        cols.forEach(col => {
+            const uniqueValues = new Set<string>();
+            rows.forEach(row => {
+                const val = row.querySelector(`td.${col.className}`)?.textContent?.trim() || '';
+                uniqueValues.add(val);
+            });
+            if (uniqueValues.size > 1) variedColsSet.add(col.className);
+        });
+        setVariedColumnClasses(Array.from(variedColsSet));
+
+        rows.forEach(row => {
+            const domainLink = row.querySelector(DOMAIN_LINK_SELECTOR);
+            if (domainLink) {
+                const fullDomain = domainLink.getAttribute('title')?.trim() || domainLink.textContent?.trim() || '';
+                const parts = fullDomain.split('.');
+                if (parts.length > 1) {
+                    const tld = parts.slice(1).join('.');
+                    tldMap.set(tld, (tldMap.get(tld) || 0) + 1);
+                }
+            }
+            const statusCell = row.querySelector(STATUS_CELL_SELECTOR);
+            const statusText = statusCell?.querySelector('a')?.textContent || statusCell?.textContent;
+            if (statusText) statusSet.add(statusText.trim());
+        });
+        setAvailableStatuses(['Any', ...Array.from(statusSet).sort()]);
+        setDetectedTlds(Array.from(tldMap.entries()).sort((a, b) => b[1] - a[1]).map(([tld, count]) => ({ tld, count })));
+        
+        // Trigger a re-render of the table logic
+        setTableVersion(v => v + 1);
+    };
+
+    scanTable();
+
+    // Debounced Observer
+    let timeout: NodeJS.Timeout;
+    const observer = new MutationObserver(() => {
+        clearTimeout(timeout);
+        timeout = setTimeout(scanTable, 150);
     });
-    setAvailableStatuses(['Any', ...Array.from(statusSet).sort()]);
-    setDetectedTlds(Array.from(tldMap.entries()).sort((a, b) => b[1] - a[1]).map(([tld, count]) => ({ tld, count })));
+
+    // Observe #content or body to catch table replacements
+    const target = document.querySelector('#content') || document.body;
+    observer.observe(target, { childList: true, subtree: true });
+
+    return () => {
+        observer.disconnect();
+        clearTimeout(timeout);
+    };
   }, []);
 
   // --- Layout & Table Logic ---
@@ -312,7 +334,7 @@ export default function Sidebar() {
         rows.forEach(row => fragment.appendChild(row));
         tbody.appendChild(fragment);
     }
-  }, [filters, sortConfig, isHeatmapEnabled]);
+  }, [filters, sortConfig, isHeatmapEnabled, tableVersion]);
 
   useEffect(() => {
     const styleId = 'domain-powertools-col-styles';
