@@ -690,7 +690,23 @@ export default function Sidebar() {
                 </span></button>
                 {isNameExpanded && (
                     <div className="space-y-4">
-                        <div className="space-y-1"><label className="text-xs text-slate-400">Length</label><div className="flex gap-2"><input type="number" placeholder="Min" value={filters.minLength} onChange={(e) => updateFilter('minLength', e.target.value)} className="w-1/2 bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-colors" title="Minimum domain name length (excluding TLD)"/><input type="number" placeholder="Max" value={filters.maxLength} onChange={(e) => updateFilter('maxLength', e.target.value)} className="w-1/2 bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-colors" title="Maximum domain name length (excluding TLD)"/></div></div>
+                        <div className="space-y-1"><label className="text-xs text-slate-400">Length</label><div className="flex gap-2"><input type="number" min="1" max="63" placeholder="Min" value={filters.minLength} onChange={(e) => {
+                            let val = e.target.value;
+                            if (val !== '') {
+                                const n = parseInt(val);
+                                if (n < 1) val = '1';
+                                else if (n > 63) val = '63';
+                            }
+                            updateFilter('minLength', val);
+                        }} className="w-1/2 bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-colors" title="Minimum domain name length (1-63, excluding TLD)"/><input type="number" min="1" max="63" placeholder="Max" value={filters.maxLength} onChange={(e) => {
+                            let val = e.target.value;
+                            if (val !== '') {
+                                const n = parseInt(val);
+                                if (n < 1) val = '1';
+                                else if (n > 63) val = '63';
+                            }
+                            updateFilter('maxLength', val);
+                        }} className="w-1/2 bg-slate-800 border border-slate-700 rounded-md px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-colors" title="Maximum domain name length (1-63, excluding TLD)"/></div></div>
                         
                         <div className="flex gap-2">
                             <input
