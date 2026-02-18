@@ -116,8 +116,24 @@ export default function Sidebar() {
   // --- Feature States ---
   const [isHeatmapEnabled, setIsHeatmapEnabled] = useState(false);
   const [isPresetsEnabled, setIsPresetsEnabled] = useState(false);
+  const [isInstantNavEnabled, setIsInstantNavEnabled] = useState(true);
   const [tableVersion, setTableVersion] = useState(0);
   const [isEnabled, setIsEnabled] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [isSwapping, setIsSwapping] = useState(false);
+  const [hasTable, setHasTable] = useState(false);
+
+  // Check for table existence
+  useEffect(() => {
+    const check = () => {
+      const exists = !!document.querySelector(TABLE_SELECTOR);
+      setHasTable(exists);
+    };
+    check();
+    const interval = setInterval(check, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Debounce filters for performance
   const [debouncedFilters, setDebouncedFilters] = useState(filters);
@@ -169,131 +185,43 @@ export default function Sidebar() {
     if (filters.pattern) count++;
     if (isHeatmapEnabled) count++;
     if (isPresetsEnabled) count++;
+    if (isInstantNavEnabled) count++;
     return count;
-  }, [filters.pattern, isHeatmapEnabled, isPresetsEnabled]);
+  }, [filters.pattern, isHeatmapEnabled, isPresetsEnabled, isInstantNavEnabled]);
 
   // --- Persistence Logic ---
   const isLoaded = useRef(false);
   const originalRowsRef = useRef<HTMLTableRowElement[]>([]);
   const isScanning = useRef(false);
+  const pageCache = useRef<Map<string, { tbody: string; pager: string }>>(new Map());
+  const fetchPageRef = useRef<any>(null);
 
-  // 1. Initial Load (Once on Mount)
-  useEffect(() => {
-    const loadAll = async () => {
-        try {
-            if (!browser.storage?.local) {
-                isLoaded.current = true;
-                return;
-            }
-            const res = await browser.storage.local.get([
-                'dpt_filters', 
-                'dpt_presets', 
-                'dpt_active_preset', 
-                'dpt_hidden_columns', 
-                'dpt_sort_config',
-                'dpt_heatmap',
-                'dpt_presets_enabled',
-                'dpt_exp_name',
-                'dpt_exp_tld',
-                'dpt_exp_adv',
-                'dpt_exp_cols',
-                'dpt_initialized',
-                'dpt_enabled'
-            ]) as any;
-            
-            if (res.dpt_filters) setFilters(res.dpt_filters);
-            if (res.dpt_enabled !== undefined) setIsEnabled(res.dpt_enabled);
-            
-            // First Run Logic
-            if (!res.dpt_initialized) {
-                setPresets(DEFAULT_PRESET_LIST);
-                browser.storage.local.set({ dpt_initialized: true, dpt_presets: DEFAULT_PRESET_LIST });
-            } else {
-                if (res.dpt_presets) setPresets(res.dpt_presets);
-            }
-            
-            if (res.dpt_active_preset) setActivePresetName(res.dpt_active_preset);
-            if (res.dpt_hidden_columns) setHiddenColumns(res.dpt_hidden_columns);
-            if (res.dpt_sort_config) setSortConfig(res.dpt_sort_config);
-            if (res.dpt_heatmap !== undefined) setIsHeatmapEnabled(res.dpt_heatmap);
-            if (res.dpt_presets_enabled !== undefined) setIsPresetsEnabled(res.dpt_presets_enabled);
-            
-            // Expansion States
-            if (res.dpt_exp_name !== undefined) setIsNameExpanded(res.dpt_exp_name);
-            if (res.dpt_exp_tld !== undefined) setIsTldExpanded(res.dpt_exp_tld);
-            if (res.dpt_exp_adv !== undefined) setIsAdvancedExpanded(res.dpt_exp_adv);
-            if (res.dpt_exp_cols !== undefined) setIsColumnsExpanded(res.dpt_exp_cols);
-            
-        } catch (e) {
-            console.error("Domain Powertools: Failed to load settings", e);
-        } finally {
-            // Delay marking as loaded to let React finish its first render cycle
-            setTimeout(() => { isLoaded.current = true; }, 200);
+  const scanTable = useCallback((force: boolean = false) => {
+    if (isScanning.current) return;
+    isScanning.current = true;
+
+    try {
+        const tbody = document.querySelector(`${TABLE_SELECTOR} tbody`);
+        if (!tbody) {
+            isScanning.current = false;
+            return;
         }
-    };
-    loadAll();
 
-    const listener = (msg: any, sender: any, sendResponse: any) => {
-        if (msg.type === 'DPT_POWER_TOGGLE') setIsEnabled(msg.enabled);
-        if (msg.type === 'DPT_STATUS_CHECK') sendResponse({ active: true });
-    };
-    browser.runtime.onMessage.addListener(listener);
-    return () => browser.runtime.onMessage.removeListener(listener);
-  }, []);
+        const trs = Array.from(tbody.querySelectorAll('tr')) as HTMLTableRowElement[];
+        
+        // Only update if rows actually changed (prevents loops)
+        const rowsChanged = trs.length !== originalRowsRef.current.length || 
+                           trs[0] !== originalRowsRef.current[0] ||
+                           trs[trs.length-1] !== originalRowsRef.current[originalRowsRef.current.length-1];
 
-  // 2. Unified Debounced Save
-  useEffect(() => {
-    if (!isLoaded.current) return;
+        if (!rowsChanged && !force) {
+            isScanning.current = false;
+            return;
+        }
 
-    const timer = setTimeout(() => {
-        browser.storage.local.set({
-            dpt_filters: filters,
-            dpt_presets: presets,
-            dpt_active_preset: activePresetName,
-            dpt_hidden_columns: hiddenColumns,
-            dpt_sort_config: sortConfig,
-            dpt_heatmap: isHeatmapEnabled,
-            dpt_presets_enabled: isPresetsEnabled,
-            dpt_exp_name: isNameExpanded,
-            dpt_exp_tld: isTldExpanded,
-            dpt_exp_adv: isAdvancedExpanded,
-            dpt_exp_cols: isColumnsExpanded,
-            dpt_enabled: isEnabled
-        });
-    }, 500);
+        originalRowsRef.current = trs;
 
-    return () => clearTimeout(timer);
-  }, [filters, presets, activePresetName, hiddenColumns, sortConfig, isHeatmapEnabled, isPresetsEnabled, isNameExpanded, isTldExpanded, isAdvancedExpanded, isColumnsExpanded, isEnabled]);
-
-  // --- DOM Detection (Mount & MutationObserver) ---
-  useEffect(() => {
-    if (!isEnabled) return;
-    const scanTable = () => {
-        if (isScanning.current) return;
-        isScanning.current = true;
-
-        try {
-            const tbody = document.querySelector(`${TABLE_SELECTOR} tbody`);
-            if (!tbody) {
-                isScanning.current = false;
-                return;
-            }
-
-            const trs = Array.from(tbody.querySelectorAll('tr')) as HTMLTableRowElement[];
-            
-            // Only update if rows actually changed (prevents loops)
-            const rowsChanged = trs.length !== originalRowsRef.current.length || 
-                               trs[0] !== originalRowsRef.current[0] ||
-                               trs[trs.length-1] !== originalRowsRef.current[originalRowsRef.current.length-1];
-
-            if (!rowsChanged) {
-                isScanning.current = false;
-                return;
-            }
-
-            originalRowsRef.current = trs;
-
-            const headers = document.querySelectorAll(`${TABLE_SELECTOR} thead th`);
+        const headers = document.querySelectorAll(`${TABLE_SELECTOR} thead th`);
         const cols: ColumnDef[] = [];
         headers.forEach((th) => {
           const headClass = Array.from(th.classList).find(c => c.startsWith('head_'));
@@ -343,10 +271,246 @@ export default function Sidebar() {
         
         // Trigger a re-render of the table logic
         setTableVersion(v => v + 1);
+    } finally {
+        isScanning.current = false;
+    }
+  }, [isEnabled]);
+
+  // --- Pagination (Instant Navigation) ---
+  const applyPageUpdate = useCallback((tbodyHtml: string, pagerHtml: string, url: string, isPopState: boolean = false) => {
+    const tbody = document.querySelector(`${TABLE_SELECTOR} tbody`);
+    const pager = document.querySelector('.listingpager');
+    
+    if (tbody && pager) {
+      setIsSwapping(true);
+      document.body.classList.add('dpt-swapping');
+
+      const tempTbody = document.createElement('tbody');
+      tempTbody.innerHTML = tbodyHtml;
+      const rows = Array.from(tempTbody.querySelectorAll('tr')) as HTMLTableRowElement[];
+      let count = 0;
+
+      rows.forEach((row) => {
+        const domainLink = row.querySelector(DOMAIN_LINK_SELECTOR); 
+        const statusCell = row.querySelector(STATUS_CELL_SELECTOR);
+        if (!domainLink) return;
+        const domainName = domainLink.getAttribute('title')?.trim() || domainLink.textContent?.trim() || '';
+        const statusText = statusCell?.querySelector('a')?.textContent?.trim() || statusCell?.textContent?.trim() || '';
+        
+        const isVisible = filterDomain(domainName, statusText, { ...debouncedFilters, compiledRegex });
+        if (!isVisible) {
+            row.setAttribute('data-dpt-filtered', 'true');
+        } else {
+            count++;
+        }
+
+        if (isHeatmapEnabled) {
+            row.querySelectorAll('td').forEach(cell => {
+                const className = Array.from(cell.classList).find(c => c.startsWith('field_')) as string;
+                if (className) {
+                    const color = getHeatColor(className, cell.textContent?.trim() || '');
+                    if (color) {
+                        cell.style.setProperty('--dpt-heat-color', color);
+                        cell.setAttribute('data-dpt-heat', 'true');
+                    }
+                }
+            });
+        }
+      });
+
+      originalRowsRef.current = rows;
+      tbody.replaceChildren(...Array.from(tempTbody.childNodes));
+      pager.innerHTML = pagerHtml;
+      
+      // Manually set visible count to avoid triggering the main useEffect redundant pass
+      setVisibleCount(count);
+
+      if (!isPopState) {
+        window.history.pushState({ dptAjax: true }, '', url);
+      }
+
+      const table = document.querySelector(TABLE_SELECTOR);
+      if (table) {
+        const tableTop = table.getBoundingClientRect().top + window.scrollY - 20;
+        if (window.scrollY > tableTop) {
+            window.scrollTo({ top: tableTop, behavior: 'smooth' });
+        }
+      }
+
+      setTimeout(() => {
+        setIsSwapping(false);
+        document.body.classList.remove('dpt-swapping');
+      }, 150);
+    }
+  }, [debouncedFilters, compiledRegex, isHeatmapEnabled]);
+
+  const fetchPage = useCallback(async (url: string, isPopState: boolean = false) => {
+    if (!isEnabled || !isInstantNavEnabled || isLoading) {
+      if (!isPopState && url !== window.location.href) window.location.href = url;
+      return;
+    }
+
+    setIsLoading(true);
+    setLoadingProgress(5);
+    document.body.classList.add('dpt-loading');
+    
+    // Smooth fake progress
+    const progressTimer = setInterval(() => {
+      setLoadingProgress(prev => {
+        if (prev >= 90) return prev;
+        return prev + (90 - prev) * 0.1;
+      });
+    }, 100);
+
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Fetch failed');
+      const html = await response.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+
+      const newTbody = doc.querySelector(`${TABLE_SELECTOR} tbody`);
+      const newPager = doc.querySelector('.listingpager');
+
+      if (newTbody && newPager) {
+        const tbodyHtml = newTbody.innerHTML;
+        const pagerHtml = newPager.innerHTML;
+        pageCache.current.set(url, { tbody: tbodyHtml, pager: pagerHtml });
+        
+        clearInterval(progressTimer);
+        setLoadingProgress(100);
+        
+        setTimeout(() => {
+          applyPageUpdate(tbodyHtml, pagerHtml, url, isPopState);
+          setTimeout(() => {
+            setIsLoading(false);
+            setLoadingProgress(0);
+          }, 300);
+        }, 150);
+      } else {
+        if (!isPopState) window.location.href = url;
+      }
+    } catch (e) {
+      console.error("DPT: AJAX Navigation failed, falling back...", e);
+      if (!isPopState) window.location.href = url;
+    } finally {
+      clearInterval(progressTimer);
+      document.body.classList.remove('dpt-loading');
+    }
+  }, [isEnabled, isInstantNavEnabled, isLoading, applyPageUpdate]);
+
+  const windowListenerRef = useRef<(e: MessageEvent) => void>(null);
+  const messageListenerRef = useRef<(msg: any, sender: any, sendResponse: any) => void>(null);
+
+  // 1. Initial Load (Once on Mount)
+  useEffect(() => {
+    console.log("DPT: Sidebar Mounted");
+    const loadAll = async () => {
+        try {
+            if (!browser.storage?.local) {
+                isLoaded.current = true;
+                return;
+            }
+            const res = await browser.storage.local.get([
+                'dpt_filters', 
+                'dpt_presets', 
+                'dpt_active_preset', 
+                'dpt_hidden_columns', 
+                'dpt_sort_config',
+                'dpt_heatmap',
+                'dpt_presets_enabled',
+                'dpt_instant_nav',
+                'dpt_exp_name',
+                'dpt_exp_tld',
+                'dpt_exp_adv',
+                'dpt_exp_cols',
+                'dpt_initialized',
+                'dpt_enabled'
+            ]) as any;
+            
+            if (res.dpt_filters) setFilters(res.dpt_filters);
+            if (res.dpt_enabled !== undefined) setIsEnabled(res.dpt_enabled);
+            
+            // First Run Logic
+            if (!res.dpt_initialized) {
+                setPresets(DEFAULT_PRESET_LIST);
+                browser.storage.local.set({ dpt_initialized: true, dpt_presets: DEFAULT_PRESET_LIST });
+            } else {
+                if (res.dpt_presets) setPresets(res.dpt_presets);
+            }
+            
+            if (res.dpt_active_preset) setActivePresetName(res.dpt_active_preset);
+            if (res.dpt_hidden_columns) setHiddenColumns(res.dpt_hidden_columns);
+            if (res.dpt_sort_config) setSortConfig(res.dpt_sort_config);
+            if (res.dpt_heatmap !== undefined) setIsHeatmapEnabled(res.dpt_heatmap);
+            if (res.dpt_presets_enabled !== undefined) setIsPresetsEnabled(res.dpt_presets_enabled);
+            if (res.dpt_instant_nav !== undefined) setIsInstantNavEnabled(res.dpt_instant_nav);
+            
+            // Expansion States
+            if (res.dpt_exp_name !== undefined) setIsNameExpanded(res.dpt_exp_name);
+            if (res.dpt_exp_tld !== undefined) setIsTldExpanded(res.dpt_exp_tld);
+            if (res.dpt_exp_adv !== undefined) setIsAdvancedExpanded(res.dpt_exp_adv);
+            if (res.dpt_exp_cols !== undefined) setIsColumnsExpanded(res.dpt_exp_cols);
+            
+        } catch (e) {
+            console.error("Domain Powertools: Failed to load settings", e);
         } finally {
-            isScanning.current = false;
+            // Delay marking as loaded to let React finish its first render cycle
+            setTimeout(() => { isLoaded.current = true; }, 200);
         }
     };
+    loadAll();
+
+    const listener = (msg: any, sender: any, sendResponse: any) => {
+        if (msg.type === 'DPT_POWER_TOGGLE') setIsEnabled(msg.enabled);
+        if (msg.type === 'DPT_STATUS_CHECK') sendResponse({ active: true });
+        if (msg.type === 'DPT_NAVIGATE') fetchPage(msg.url);
+    };
+    messageListenerRef.current = listener;
+    browser.runtime.onMessage.addListener(listener);
+
+    const windowListener = (e: MessageEvent) => {
+      if (e.data?.type === 'DPT_NAVIGATE_UI') {
+        fetchPage(e.data.url);
+      }
+    };
+    windowListenerRef.current = windowListener;
+    window.addEventListener('message', windowListener);
+
+    return () => {
+      browser.runtime.onMessage.removeListener(listener);
+      window.removeEventListener('message', windowListener);
+    };
+  }, []); // Empty dependency array break the loop!
+
+  // 2. Unified Debounced Save
+  useEffect(() => {
+    if (!isLoaded.current) return;
+
+    const timer = setTimeout(() => {
+        browser.storage.local.set({
+            dpt_filters: filters,
+            dpt_presets: presets,
+            dpt_active_preset: activePresetName,
+            dpt_hidden_columns: hiddenColumns,
+            dpt_sort_config: sortConfig,
+            dpt_heatmap: isHeatmapEnabled,
+            dpt_presets_enabled: isPresetsEnabled,
+            dpt_instant_nav: isInstantNavEnabled,
+            dpt_exp_name: isNameExpanded,
+            dpt_exp_tld: isTldExpanded,
+            dpt_exp_adv: isAdvancedExpanded,
+            dpt_exp_cols: isColumnsExpanded,
+            dpt_enabled: isEnabled
+        });
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [filters, presets, activePresetName, hiddenColumns, sortConfig, isHeatmapEnabled, isPresetsEnabled, isInstantNavEnabled, isNameExpanded, isTldExpanded, isAdvancedExpanded, isColumnsExpanded, isEnabled]);
+
+  // --- DOM Detection (Mount & MutationObserver) ---
+  useEffect(() => {
+    if (!isEnabled) return;
 
     scanTable();
 
@@ -361,7 +525,7 @@ export default function Sidebar() {
         if (isSelfMutation) return;
 
         clearTimeout(timeout);
-        timeout = setTimeout(scanTable, 150);
+        timeout = setTimeout(() => scanTable(), 150);
     });
 
     // Observe #content or body to catch table replacements
@@ -377,21 +541,24 @@ export default function Sidebar() {
         observer.disconnect();
         clearTimeout(timeout);
     };
-  }, []);
+  }, [isEnabled, scanTable]);
 
   // --- Layout & Table Logic ---
   useEffect(() => {
     if (!isEnabled) {
+        document.documentElement.classList.remove('dpt-enabled');
         document.body.classList.remove('dpt-enabled');
         document.body.style.removeProperty('--dpt-sidebar-width');
         return;
     }
     
+    document.documentElement.classList.add('dpt-enabled');
     document.body.classList.add('dpt-enabled');
     const width = isCollapsed ? '48px' : '320px';
     document.body.style.setProperty('--dpt-sidebar-width', width);
 
     return () => {
+        document.documentElement.classList.remove('dpt-enabled');
         document.body.classList.remove('dpt-enabled');
         document.body.style.removeProperty('--dpt-sidebar-width');
     };
@@ -399,7 +566,7 @@ export default function Sidebar() {
 
   useEffect(() => {
     const tbody = document.querySelector(`${TABLE_SELECTOR} tbody`);
-    if (!tbody || originalRowsRef.current.length === 0) return;
+    if (!tbody || originalRowsRef.current.length === 0 || isScanning.current) return;
 
     if (!isEnabled) {
       originalRowsRef.current.forEach(row => {
@@ -493,6 +660,9 @@ export default function Sidebar() {
 
     // Layout Push Styles
     const layoutStyles = `
+      html.dpt-enabled {
+        scroll-behavior: smooth !important;
+      }
       body.dpt-enabled { 
         margin-right: var(--dpt-sidebar-width) !important; 
         transition: margin-right 300ms cubic-bezier(0.4, 0, 0.2, 1) !important;
@@ -502,6 +672,18 @@ export default function Sidebar() {
         right: var(--dpt-sidebar-width) !important; 
         left: auto !important; 
         transition: right 300ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+      }
+      
+      /* Table Stabilization during AJAX swap */
+      body.dpt-loading ${TABLE_SELECTOR},
+      body.dpt-swapping ${TABLE_SELECTOR} {
+        opacity: 0.3 !important;
+        pointer-events: none;
+        min-height: 600px;
+      }
+      ${TABLE_SELECTOR} {
+        transition: opacity 0.5s ease-in-out;
+        will-change: opacity;
       }
     `;
 
@@ -704,10 +886,20 @@ export default function Sidebar() {
     setIsColumnsExpanded(false);
   };
 
-  if (!isEnabled) return null;
+  if (!isEnabled || !hasTable) return null;
 
   return (
     <div className={`fixed top-0 right-0 h-full bg-slate-900 text-slate-100 shadow-2xl z-[2147483647] border-l border-slate-700 font-sans transition-all duration-300 ease-in-out ${isCollapsed ? 'w-12' : 'w-80'}`}>
+      {/* Top Loading Progress Bar */}
+      {isLoading && (
+        <div className="absolute top-0 left-0 w-full h-0.5 overflow-hidden z-[60] bg-teal-950/50">
+          <div 
+            className="h-full bg-teal-400 shadow-[0_0_8px_rgba(45,212,191,0.8)] transition-all duration-300 ease-out"
+            style={{ width: `${loadingProgress}%` }}
+          ></div>
+        </div>
+      )}
+      
       <div className={`flex flex-col h-full ${isCollapsed ? 'hidden' : 'flex'}`}>
         <div className="p-4 flex-shrink-0 bg-slate-900 z-10 border-b border-slate-700">
            <div className="flex justify-between items-center">
@@ -715,7 +907,9 @@ export default function Sidebar() {
                 <Logo />
             </div>
                <div>
-                   <h2 className="text-lg font-bold tracking-tight"><span className="text-white">Domain</span> <span className="text-teal-400">Powertools</span></h2>
+                   <div className="flex items-center gap-2">
+                     <h2 className="text-lg font-bold tracking-tight"><span className="text-white">Domain</span> <span className="text-teal-400">Powertools</span></h2>
+                   </div>
                    <div className="text-xs text-slate-500">Version 1.0.0</div>
                </div>
                <div className="flex items-center">
@@ -955,6 +1149,13 @@ export default function Sidebar() {
                             <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">Enable Heatmap</span>
                             <div className="relative">
                                 <input type="checkbox" checked={isHeatmapEnabled} onChange={(e) => setIsHeatmapEnabled(e.target.checked)} className="sr-only peer"/>
+                                <div className="w-8 h-4 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-teal-500"></div>
+                            </div>
+                        </label>
+                        <label className="flex items-center justify-between cursor-pointer group" title="Navigate between pages instantly without a full page reload">
+                            <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">Instant Pagination</span>
+                            <div className="relative">
+                                <input type="checkbox" checked={isInstantNavEnabled} onChange={(e) => setIsInstantNavEnabled(e.target.checked)} className="sr-only peer"/>
                                 <div className="w-8 h-4 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-teal-500"></div>
                             </div>
                         </label>

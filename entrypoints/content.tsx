@@ -9,38 +9,27 @@ export default defineContentScript({
   cssInjectionMode: 'ui',
 
   async main(ctx) {
+    // Synchronous state tracking for immediate e.preventDefault()
+    let isInstantNavEnabled = true;
+    let isExtensionEnabled = true;
 
-    // Helper to wait for the table
-    const waitForTable = () => {
-      return new Promise<Element>((resolve) => {
-        const table = document.querySelector(TABLE_SELECTOR);
-        if (table) return resolve(table);
-
-        const observer = new MutationObserver(() => {
-          const table = document.querySelector(TABLE_SELECTOR);
-          if (table) {
-            observer.disconnect();
-            resolve(table);
-          }
-        });
-
-        observer.observe(document.body, { childList: true, subtree: true });
-        
-        // Timeout after 5 seconds
-        setTimeout(() => {
-          observer.disconnect();
-        }, 5000);
-      });
+    const updateStateFromStorage = async () => {
+      const res = await browser.storage.local.get(['dpt_instant_nav', 'dpt_enabled']);
+      isInstantNavEnabled = res.dpt_instant_nav !== false;
+      isExtensionEnabled = res.dpt_enabled !== false;
     };
+    
+    await updateStateFromStorage();
 
-    const table = await waitForTable();
-    if (!table) {
-      return;
-    }
+    // Listen for setting changes in real-time
+    browser.storage.onChanged.addListener((changes) => {
+      if (changes.dpt_instant_nav) isInstantNavEnabled = changes.dpt_instant_nav.newValue !== false;
+      if (changes.dpt_enabled) isExtensionEnabled = changes.dpt_enabled.newValue !== false;
+    });
 
     const ui = await createShadowRootUi(ctx, {
       name: 'domain-powertools-sidebar',
-      position: 'inline',
+      position: 'overlay',
       onMount: (container) => {
         const app = document.createElement('div');
         container.append(app);
@@ -54,5 +43,39 @@ export default defineContentScript({
     });
 
     ui.mount();
+
+    // --- Global Pagination Hijacker ---
+    const handlePaginationClick = (e: MouseEvent) => {
+      // Check link synchronously to prevent browser delay
+      const target = e.target as HTMLElement;
+      const link = target.closest('a') as HTMLAnchorElement;
+      if (!link || !link.href) return;
+
+      const text = link.textContent || '';
+      const isNext = text.toLowerCase().includes('next') || text.includes('»');
+      const isPrev = text.toLowerCase().includes('prev') || text.includes('«');
+      const isPager = link.closest('.listingpager, .pager, .pagination') || link.classList.contains('next') || link.classList.contains('prev');
+
+      if (isPager && (isNext || isPrev)) {
+        if (isInstantNavEnabled && isExtensionEnabled) {
+          // MUST be synchronous
+          e.preventDefault();
+          e.stopPropagation();
+          
+          browser.runtime.sendMessage({ type: 'DPT_NAVIGATE', url: link.href }).catch(() => {
+            window.postMessage({ type: 'DPT_NAVIGATE_UI', url: link.href }, '*');
+          });
+        }
+      }
+    };
+
+    const handlePopState = () => {
+      if (isInstantNavEnabled && isExtensionEnabled) {
+        window.postMessage({ type: 'DPT_NAVIGATE_UI', url: window.location.href }, '*');
+      }
+    };
+
+    document.addEventListener('click', handlePaginationClick, true);
+    window.addEventListener('popstate', handlePopState);
   },
 });
