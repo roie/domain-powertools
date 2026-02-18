@@ -175,6 +175,7 @@ export default function Sidebar() {
   // --- Persistence Logic ---
   const isLoaded = useRef(false);
   const originalRowsRef = useRef<HTMLTableRowElement[]>([]);
+  const isScanning = useRef(false);
 
   // 1. Initial Load (Once on Mount)
   useEffect(() => {
@@ -268,13 +269,31 @@ export default function Sidebar() {
   useEffect(() => {
     if (!isEnabled) return;
     const scanTable = () => {
-        const tbody = document.querySelector(`${TABLE_SELECTOR} tbody`);
-        if (tbody) {
-            const trs = Array.from(tbody.querySelectorAll('tr')) as HTMLTableRowElement[];
-            originalRowsRef.current = trs;
-        }
+        if (isScanning.current) return;
+        isScanning.current = true;
 
-        const headers = document.querySelectorAll(`${TABLE_SELECTOR} thead th`);
+        try {
+            const tbody = document.querySelector(`${TABLE_SELECTOR} tbody`);
+            if (!tbody) {
+                isScanning.current = false;
+                return;
+            }
+
+            const trs = Array.from(tbody.querySelectorAll('tr')) as HTMLTableRowElement[];
+            
+            // Only update if rows actually changed (prevents loops)
+            const rowsChanged = trs.length !== originalRowsRef.current.length || 
+                               trs[0] !== originalRowsRef.current[0] ||
+                               trs[trs.length-1] !== originalRowsRef.current[originalRowsRef.current.length-1];
+
+            if (!rowsChanged) {
+                isScanning.current = false;
+                return;
+            }
+
+            originalRowsRef.current = trs;
+
+            const headers = document.querySelectorAll(`${TABLE_SELECTOR} thead th`);
         const cols: ColumnDef[] = [];
         headers.forEach((th) => {
           const headClass = Array.from(th.classList).find(c => c.startsWith('head_'));
@@ -324,20 +343,35 @@ export default function Sidebar() {
         
         // Trigger a re-render of the table logic
         setTableVersion(v => v + 1);
+        } finally {
+            isScanning.current = false;
+        }
     };
 
     scanTable();
 
     // Debounced Observer
     let timeout: NodeJS.Timeout;
-    const observer = new MutationObserver(() => {
+    const observer = new MutationObserver((mutations) => {
+        // Ignore mutations caused by our own data attributes (prevents infinite loop)
+        const isSelfMutation = mutations.every(m => 
+            m.type === 'attributes' && 
+            (m.attributeName === 'data-dpt-filtered' || m.attributeName === 'data-dpt-heat' || m.attributeName === 'style')
+        );
+        if (isSelfMutation) return;
+
         clearTimeout(timeout);
         timeout = setTimeout(scanTable, 150);
     });
 
     // Observe #content or body to catch table replacements
     const target = document.querySelector('#content') || document.body;
-    observer.observe(target, { childList: true, subtree: true });
+    observer.observe(target, { 
+        childList: true, 
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class', 'id'] // Watch for structural changes
+    });
 
     return () => {
         observer.disconnect();
