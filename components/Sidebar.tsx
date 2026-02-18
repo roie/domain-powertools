@@ -119,6 +119,16 @@ export default function Sidebar() {
   const [tableVersion, setTableVersion] = useState(0);
   const [isEnabled, setIsEnabled] = useState(true);
 
+  // Pre-compile Regex for performance
+  const compiledRegex = useMemo(() => {
+    if (!filters.matchText) return null;
+    try {
+      return new RegExp(filters.matchText, 'i');
+    } catch (e) {
+      return null;
+    }
+  }, [filters.matchText]);
+
   // --- Collapsible UI States ---
   const [isNameExpanded, setIsNameExpanded] = useState(true);
   const [isTldExpanded, setIsTldExpanded] = useState(false);
@@ -350,7 +360,7 @@ export default function Sidebar() {
       if (!domainLink) return;
       const domainName = domainLink.getAttribute('title')?.trim() || domainLink.textContent?.trim() || '';
       const statusText = statusCell?.querySelector('a')?.textContent?.trim() || statusCell?.textContent?.trim() || '';
-      const isVisible = filterDomain(domainName, statusText, filters);
+      const isVisible = filterDomain(domainName, statusText, { ...filters, compiledRegex });
       row.style.display = isVisible ? '' : 'none';
       if (isVisible) count++;
 
@@ -381,7 +391,7 @@ export default function Sidebar() {
         rows.forEach(row => fragment.appendChild(row));
         tbody.appendChild(fragment);
     }
-  }, [filters, sortConfig, isHeatmapEnabled, tableVersion]);
+  }, [filters, sortConfig, isHeatmapEnabled, tableVersion, compiledRegex]);
 
   useEffect(() => {
     const styleId = 'domain-powertools-col-styles';

@@ -18,6 +18,9 @@ export type FilterState = {
   // TLD & Status
   tldFilter: string; // Comma separated
   statusFilter: string; 
+
+  // Pre-compiled objects for performance
+  compiledRegex?: RegExp | null;
 };
 
 export const filterDomain = (
@@ -34,14 +37,11 @@ export const filterDomain = (
   if (filters.maxLength !== '' && sld.length > Number(filters.maxLength)) return false;
 
   // 2. Text Match (with Regex Support)
-  if (filters.matchText) {
-    try {
-      const regex = new RegExp(filters.matchText, 'i');
-      if (!regex.test(sld)) return false;
-    } catch (e) {
-      // Fallback to simple includes if regex is invalid
-      if (!sld.includes(filters.matchText.toLowerCase())) return false;
-    }
+  if (filters.compiledRegex) {
+    if (!filters.compiledRegex.test(sld)) return false;
+  } else if (filters.matchText) {
+    // Fallback if regex failed to compile or wasn't pre-compiled
+    if (!sld.includes(filters.matchText.toLowerCase())) return false;
   }
   
   if (filters.startsWith && !sld.startsWith(filters.startsWith.toLowerCase())) return false;
