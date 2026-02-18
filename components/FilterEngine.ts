@@ -118,13 +118,21 @@ const extractSortValue = (cell: Element | null, columnClass: string = ''): numbe
       const lower = raw.toLowerCase();
 
       // A. Relative Dates (Today/Yesterday/X days)
-      if (lower.startsWith('today')) {
-        const timePart = lower.replace('today', '').trim();
-        return new Date().setHours(0,0,0,0) + (timePart ? parseInt(timePart.replace(':', '')) : 9999); 
-      }
-      if (lower.startsWith('yesterday')) {
-        const timePart = lower.replace('yesterday', '').trim();
-        return new Date(Date.now() - 86400000).setHours(0,0,0,0) + (timePart ? parseInt(timePart.replace(':', '')) : 9999);
+      if (lower.startsWith('today') || lower.startsWith('yesterday')) {
+        const isYesterday = lower.startsWith('yesterday');
+        const date = new Date();
+        if (isYesterday) date.setDate(date.getDate() - 1);
+        date.setHours(0, 0, 0, 0);
+        
+        const timePart = lower.replace(isYesterday ? 'yesterday' : 'today', '').trim();
+        if (timePart) {
+            const [h, m] = timePart.split(':').map(n => parseInt(n));
+            if (!isNaN(h)) date.setHours(h, isNaN(m) ? 0 : m);
+        } else {
+            // If no time, assume end of day for "Today" so it sorts above earlier times if descending
+            date.setHours(23, 59, 59, 999);
+        }
+        return date.getTime();
       }
       const daysMatch = lower.match(/^(\d+)\s+days?$/);
       if (daysMatch) {
