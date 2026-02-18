@@ -119,15 +119,24 @@ export default function Sidebar() {
   const [tableVersion, setTableVersion] = useState(0);
   const [isEnabled, setIsEnabled] = useState(true);
 
+  // Debounce filters for performance
+  const [debouncedFilters, setDebouncedFilters] = useState(filters);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+        setDebouncedFilters(filters);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [filters]);
+
   // Pre-compile Regex for performance
   const compiledRegex = useMemo(() => {
-    if (!filters.matchText) return null;
+    if (!debouncedFilters.matchText) return null;
     try {
-      return new RegExp(filters.matchText, 'i');
+      return new RegExp(debouncedFilters.matchText, 'i');
     } catch (e) {
       return null;
     }
-  }, [filters.matchText]);
+  }, [debouncedFilters.matchText]);
 
   // --- Collapsible UI States ---
   const [isNameExpanded, setIsNameExpanded] = useState(true);
@@ -261,7 +270,8 @@ export default function Sidebar() {
     const scanTable = () => {
         const tbody = document.querySelector(`${TABLE_SELECTOR} tbody`);
         if (tbody) {
-            originalRowsRef.current = Array.from(tbody.querySelectorAll('tr')) as HTMLTableRowElement[];
+            const trs = Array.from(tbody.querySelectorAll('tr')) as HTMLTableRowElement[];
+            originalRowsRef.current = trs;
         }
 
         const headers = document.querySelectorAll(`${TABLE_SELECTOR} thead th`);
@@ -348,9 +358,21 @@ export default function Sidebar() {
   }, [isCollapsed, isEnabled]);
 
   useEffect(() => {
-    if (!isEnabled) return;
     const tbody = document.querySelector(`${TABLE_SELECTOR} tbody`);
     if (!tbody || originalRowsRef.current.length === 0) return;
+
+    if (!isEnabled) {
+      originalRowsRef.current.forEach(row => {
+        row.removeAttribute('data-dpt-filtered');
+        row.querySelectorAll('td').forEach(cell => {
+          cell.style.removeProperty('--dpt-heat-color');
+          cell.removeAttribute('data-dpt-heat');
+          cell.style.backgroundColor = '';
+        });
+      });
+      return;
+    }
+
     let rows = [...originalRowsRef.current];
     let count = 0;
 
@@ -360,7 +382,7 @@ export default function Sidebar() {
       if (!domainLink) return;
       const domainName = domainLink.getAttribute('title')?.trim() || domainLink.textContent?.trim() || '';
       const statusText = statusCell?.querySelector('a')?.textContent?.trim() || statusCell?.textContent?.trim() || '';
-      const isVisible = filterDomain(domainName, statusText, { ...filters, compiledRegex });
+      const isVisible = filterDomain(domainName, statusText, { ...debouncedFilters, compiledRegex });
       
       // Use Data Attributes instead of direct style.display
       if (isVisible) {
@@ -370,11 +392,12 @@ export default function Sidebar() {
           row.setAttribute('data-dpt-filtered', 'true');
       }
 
-      // Apply Heatmap via CSS Variables
+      // Apply Heatmap via CSS Variables & Data Attributes
       const cells = row.querySelectorAll('td');
       cells.forEach(cell => {
           if (!isHeatmapEnabled) {
               cell.style.removeProperty('--dpt-heat-color');
+              cell.removeAttribute('data-dpt-heat');
               cell.style.backgroundColor = '';
               return;
           }
@@ -383,13 +406,15 @@ export default function Sidebar() {
               const color = getHeatColor(className, cell.textContent?.trim() || '');
               if (color) {
                 cell.style.setProperty('--dpt-heat-color', color);
-                cell.style.backgroundColor = 'var(--dpt-heat-color)';
+                cell.setAttribute('data-dpt-heat', 'true');
               } else {
                 cell.style.removeProperty('--dpt-heat-color');
+                cell.removeAttribute('data-dpt-heat');
                 cell.style.backgroundColor = '';
               }
           } else {
               cell.style.removeProperty('--dpt-heat-color');
+              cell.removeAttribute('data-dpt-heat');
               cell.style.backgroundColor = '';
           }
       });
@@ -407,7 +432,7 @@ export default function Sidebar() {
         rows.forEach(row => fragment.appendChild(row));
         tbody.appendChild(fragment);
     }
-  }, [filters, sortConfig, isHeatmapEnabled, tableVersion, compiledRegex]);
+  }, [debouncedFilters, sortConfig, isHeatmapEnabled, tableVersion, compiledRegex, isEnabled]);
 
   useEffect(() => {
     const styleId = 'domain-powertools-col-styles';
@@ -419,7 +444,14 @@ export default function Sidebar() {
     }
     const hiddenRules = hiddenColumns.map(c => `${TABLE_SELECTOR} th.${c.replace('field_', 'head_')}, ${TABLE_SELECTOR} td.${c} { display: none !important; }`).join('\n');
     let highlightRule = sortConfig.column ? `${TABLE_SELECTOR} td.${sortConfig.column} { border-left: 2px solid rgba(148, 163, 184, 0.4) !important; border-right: 2px solid rgba(148, 163, 184, 0.4) !important; background-color: #e8e8e8; }` : '';
-    styleTag.textContent = hiddenRules + '\n' + highlightRule;
+    
+    // Core Filter & Heatmap Styles
+    const coreStyles = `
+      ${TABLE_SELECTOR} tr[data-dpt-filtered="true"] { display: none !important; }
+      ${TABLE_SELECTOR} td[data-dpt-heat="true"] { background-color: var(--dpt-heat-color) !important; transition: background-color 0.2s; }
+    `;
+
+    styleTag.textContent = hiddenRules + '\n' + highlightRule + '\n' + coreStyles;
   }, [hiddenColumns, sortConfig.column]);
 
   // --- Handlers ---
