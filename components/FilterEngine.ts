@@ -28,9 +28,7 @@ export const filterDomain = (
   status: string,     
   filters: FilterState
 ): boolean => {
-  const parts = domainName.toLowerCase().split('.');
-  const sld = parts[0]; 
-  const tld = parts.slice(1).join('.'); 
+  const { sld, tld } = splitDomain(domainName); 
 
   // 1. Length (IMPORTANT: USER REQUESTED THIS FIRST)
   if (filters.minLength !== '' && sld.length < Number(filters.minLength)) return false;
@@ -87,11 +85,10 @@ export const filterDomain = (
 
   // 7. TLD
   if (filters.tldFilter) {
-    const tlds = filters.tldFilter.toLowerCase().split(',').map(s => s.trim()).filter(s => s.length > 0);
-    if (tlds.length > 0) {
-        // Match if TLD is in the list. Some domains might be .com.au, so we check inclusion or exact.
-        // Usually users want exact match on the TLD part.
-        if (!tlds.some(t => t === tld || t === '.' + tld)) return false;
+    const activeTlds = filters.tldFilter.toLowerCase().split(',').map(s => s.trim().replace(/^\./, '')).filter(Boolean);
+    if (activeTlds.length > 0) {
+        // Exact match on the extracted TLD part
+        if (!activeTlds.includes(tld)) return false;
     }
   }
 
@@ -101,6 +98,21 @@ export const filterDomain = (
   }
 
   return true;
+};
+
+/**
+ * Splits a domain into SLD (name) and TLD (extension).
+ * Based on the fact that expireddomains.net does not list subdomains,
+ * the first dot is the delimiter between the name and the extension.
+ */
+export const splitDomain = (domain: string): { sld: string; tld: string } => {
+  const firstDotIndex = domain.indexOf('.');
+  if (firstDotIndex === -1) return { sld: domain, tld: '' };
+  
+  return {
+    sld: domain.substring(0, firstDotIndex).toLowerCase(),
+    tld: domain.substring(firstDotIndex + 1).toLowerCase()
+  };
 };
 
 const extractSortValue = (cell: Element | null, columnClass: string = ''): number | string => {

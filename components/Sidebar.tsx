@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { browser } from 'wxt/browser';
-import { FilterState, filterDomain, sortRows, getHeatColor } from './FilterEngine';
+import { FilterState, filterDomain, sortRows, getHeatColor, splitDomain } from './FilterEngine';
 
 const TABLE_SELECTOR = '#listing table.base1';
 const DOMAIN_LINK_SELECTOR = 'td.field_domain a';
@@ -310,9 +310,8 @@ export default function Sidebar() {
             const domainLink = row.querySelector(DOMAIN_LINK_SELECTOR);
             if (domainLink) {
                 const fullDomain = domainLink.getAttribute('title')?.trim() || domainLink.textContent?.trim() || '';
-                const parts = fullDomain.split('.');
-                if (parts.length > 1) {
-                    const tld = parts.slice(1).join('.');
+                const { tld } = splitDomain(fullDomain);
+                if (tld) {
                     tldMap.set(tld, (tldMap.get(tld) || 0) + 1);
                 }
             }
