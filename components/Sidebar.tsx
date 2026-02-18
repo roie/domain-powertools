@@ -382,12 +382,19 @@ export default function Sidebar() {
   // --- Layout & Table Logic ---
   useEffect(() => {
     if (!isEnabled) {
-        document.body.style.marginRight = '';
+        document.body.classList.remove('dpt-enabled');
+        document.body.style.removeProperty('--dpt-sidebar-width');
         return;
     }
-    document.body.style.transition = 'margin-right 300ms cubic-bezier(0.4, 0, 0.2, 1)';
-    document.body.style.marginRight = isCollapsed ? '48px' : '320px';
-    return () => { document.body.style.marginRight = ''; };
+    
+    document.body.classList.add('dpt-enabled');
+    const width = isCollapsed ? '48px' : '320px';
+    document.body.style.setProperty('--dpt-sidebar-width', width);
+
+    return () => {
+        document.body.classList.remove('dpt-enabled');
+        document.body.style.removeProperty('--dpt-sidebar-width');
+    };
   }, [isCollapsed, isEnabled]);
 
   useEffect(() => {
@@ -484,7 +491,21 @@ export default function Sidebar() {
       ${TABLE_SELECTOR} td[data-dpt-heat="true"] { background-color: var(--dpt-heat-color) !important; transition: background-color 0.2s; }
     `;
 
-    styleTag.textContent = hiddenRules + '\n' + highlightRule + '\n' + coreStyles;
+    // Layout Push Styles
+    const layoutStyles = `
+      body.dpt-enabled { 
+        margin-right: var(--dpt-sidebar-width) !important; 
+        transition: margin-right 300ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+      }
+      /* Ensure fixed elements on site like navigation bar are also pushed */
+      body.dpt-enabled #navigation { 
+        right: var(--dpt-sidebar-width) !important; 
+        left: auto !important; 
+        transition: right 300ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+      }
+    `;
+
+    styleTag.textContent = [hiddenRules, highlightRule, coreStyles, layoutStyles].join('\n');
   }, [hiddenColumns, sortConfig.column]);
 
   // --- Handlers ---
