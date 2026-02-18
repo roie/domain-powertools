@@ -361,20 +361,36 @@ export default function Sidebar() {
       const domainName = domainLink.getAttribute('title')?.trim() || domainLink.textContent?.trim() || '';
       const statusText = statusCell?.querySelector('a')?.textContent?.trim() || statusCell?.textContent?.trim() || '';
       const isVisible = filterDomain(domainName, statusText, { ...filters, compiledRegex });
-      row.style.display = isVisible ? '' : 'none';
-      if (isVisible) count++;
+      
+      // Use Data Attributes instead of direct style.display
+      if (isVisible) {
+          row.removeAttribute('data-dpt-filtered');
+          count++;
+      } else {
+          row.setAttribute('data-dpt-filtered', 'true');
+      }
 
-      // Apply Heatmap
+      // Apply Heatmap via CSS Variables
       const cells = row.querySelectorAll('td');
       cells.forEach(cell => {
           if (!isHeatmapEnabled) {
+              cell.style.removeProperty('--dpt-heat-color');
               cell.style.backgroundColor = '';
               return;
           }
           const className = Array.from(cell.classList).find(c => c.startsWith('field_')) as string;
           if (className) {
               const color = getHeatColor(className, cell.textContent?.trim() || '');
-              cell.style.backgroundColor = color || '';
+              if (color) {
+                cell.style.setProperty('--dpt-heat-color', color);
+                cell.style.backgroundColor = 'var(--dpt-heat-color)';
+              } else {
+                cell.style.removeProperty('--dpt-heat-color');
+                cell.style.backgroundColor = '';
+              }
+          } else {
+              cell.style.removeProperty('--dpt-heat-color');
+              cell.style.backgroundColor = '';
           }
       });
     });

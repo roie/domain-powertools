@@ -1,1 +1,6 @@
 @import "tailwindcss";
+
+/* Domain Powertools - Filter Logic */
+#listing table.base1 tr[data-dpt-filtered="true"] {
+    display: none !important;
+}
