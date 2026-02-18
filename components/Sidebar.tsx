@@ -279,9 +279,9 @@ export default function Sidebar() {
   // --- Pagination (Instant Navigation) ---
   const applyPageUpdate = useCallback((tbodyHtml: string, pagerHtml: string, url: string, isPopState: boolean = false) => {
     const tbody = document.querySelector(`${TABLE_SELECTOR} tbody`);
-    const pager = document.querySelector('.listingpager');
+    const pagers = document.querySelectorAll('.listingpager');
     
-    if (tbody && pager) {
+    if (tbody && pagers.length > 0) {
       setIsSwapping(true);
       document.body.classList.add('dpt-swapping');
 
@@ -318,9 +318,24 @@ export default function Sidebar() {
         }
       });
 
+      // Update cache with filtered nodes BEFORE swap
       originalRowsRef.current = rows;
+      
+      // Atomic swap for table
       tbody.replaceChildren(...Array.from(tempTbody.childNodes));
-      pager.innerHTML = pagerHtml;
+      
+      // SYNC ALL PAGERS (Top and Bottom)
+      // Extract fresh pagers from the source HTML string to handle potentially different content in top/bottom
+      const parser = new DOMParser();
+      const sourceDoc = parser.parseFromString(`<!DOCTYPE html><html><body>${pagerHtml}</body></html>`, 'text/html');
+      const freshPagers = sourceDoc.querySelectorAll('.listingpager');
+
+      pagers.forEach((oldPager, index) => {
+        const freshSource = freshPagers[index] || freshPagers[0];
+        if (freshSource) {
+            oldPager.innerHTML = freshSource.innerHTML;
+        }
+      });
       
       // Manually set visible count to avoid triggering the main useEffect redundant pass
       setVisibleCount(count);
@@ -370,11 +385,13 @@ export default function Sidebar() {
       const doc = parser.parseFromString(html, 'text/html');
 
       const newTbody = doc.querySelector(`${TABLE_SELECTOR} tbody`);
-      const newPager = doc.querySelector('.listingpager');
+      // Use a more robust way to grab all pagers
+      const pagerContainer = doc.createElement('div');
+      doc.querySelectorAll('.listingpager').forEach(p => pagerContainer.appendChild(p.cloneNode(true)));
 
-      if (newTbody && newPager) {
+      if (newTbody && pagerContainer.childNodes.length > 0) {
         const tbodyHtml = newTbody.innerHTML;
-        const pagerHtml = newPager.innerHTML;
+        const pagerHtml = pagerContainer.innerHTML;
         pageCache.current.set(url, { tbody: tbodyHtml, pager: pagerHtml });
         
         clearInterval(progressTimer);
