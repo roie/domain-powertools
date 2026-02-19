@@ -19,6 +19,9 @@ export type FilterState = {
   tldFilter: string; // Comma separated
   statusFilter: string; 
 
+  // Visual
+  highlightKeywords: string; // Comma separated
+
   // Pre-compiled objects for performance
   compiledRegex?: RegExp | null;
 };

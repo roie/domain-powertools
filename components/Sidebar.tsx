@@ -39,6 +39,7 @@ const DEFAULT_FILTERS: FilterState = {
   pattern: '',
   tldFilter: '',
   statusFilter: 'Any',
+  highlightKeywords: '',
 };
 
 const DEFAULT_PRESET_LIST: Preset[] = [
@@ -152,6 +153,19 @@ export default function Sidebar() {
       return null;
     }
   }, [debouncedFilters.matchText]);
+
+  const highlightRegex = useMemo(() => {
+    if (!debouncedFilters.highlightKeywords) return null;
+    const terms = debouncedFilters.highlightKeywords.split(',')
+      .map(s => s.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) // Escape regex special chars
+      .filter(Boolean);
+    if (terms.length === 0) return null;
+    try {
+      return new RegExp(`(${terms.join('|')})`, 'gi');
+    } catch (e) {
+      return null;
+    }
+  }, [debouncedFilters.highlightKeywords]);
 
   // --- Collapsible UI States ---
   const [isNameExpanded, setIsNameExpanded] = useState(true);
@@ -288,18 +302,27 @@ export default function Sidebar() {
 
       // 2. Pre-Filter and Pre-Heat in the background
       rows.forEach((row) => {
-        const domainLink = row.querySelector(DOMAIN_LINK_SELECTOR); 
+        const domainLink = row.querySelector(DOMAIN_LINK_SELECTOR) as HTMLAnchorElement; 
         const statusCell = row.querySelector(STATUS_CELL_SELECTOR);
         if (!domainLink) return;
-        const domainName = domainLink.getAttribute('title')?.trim() || domainLink.textContent?.trim() || '';
+        
+        // Store original domain name
+        const originalDomain = domainLink.getAttribute('title')?.trim() || domainLink.textContent?.trim() || '';
+        domainLink.setAttribute('data-dpt-original', originalDomain);
+
         const statusText = statusCell?.querySelector('a')?.textContent?.trim() || statusCell?.textContent?.trim() || '';
         
-        const isVisible = filterDomain(domainName, statusText, { ...filters, compiledRegex });
+        const isVisible = filterDomain(originalDomain, statusText, { ...filters, compiledRegex });
         if (!isVisible) {
             row.setAttribute('data-dpt-filtered', 'true');
         } else {
             row.removeAttribute('data-dpt-filtered');
             count++;
+        }
+
+        // Apply Keyword Highlighting
+        if (isVisible && highlightRegex) {
+            domainLink.innerHTML = originalDomain.replace(highlightRegex, '<mark class="dpt-highlight">$1</mark>');
         }
 
         if (isHeatmapEnabled) {
@@ -354,7 +377,7 @@ export default function Sidebar() {
         }
       }
     }
-  }, [filters, sortConfig, isHeatmapEnabled, compiledRegex]);
+  }, [filters, sortConfig, isHeatmapEnabled, compiledRegex, highlightRegex]);
 
   const fetchPage = useCallback(async (url: string, isPopState: boolean = false) => {
     if (!isEnabled || !isInstantNavEnabled || isLoading) {
@@ -607,12 +630,18 @@ export default function Sidebar() {
     let count = 0;
 
     rows.forEach((row) => {
-      const domainLink = row.querySelector(DOMAIN_LINK_SELECTOR); 
+      const domainLink = row.querySelector(DOMAIN_LINK_SELECTOR) as HTMLAnchorElement; 
       const statusCell = row.querySelector(STATUS_CELL_SELECTOR);
       if (!domainLink) return;
-      const domainName = domainLink.getAttribute('title')?.trim() || domainLink.textContent?.trim() || '';
+      
+      // Store original domain name to prevent multiple wrapping
+      const originalDomain = domainLink.getAttribute('data-dpt-original') || domainLink.textContent?.trim() || '';
+      if (!domainLink.hasAttribute('data-dpt-original')) {
+          domainLink.setAttribute('data-dpt-original', originalDomain);
+      }
+
       const statusText = statusCell?.querySelector('a')?.textContent?.trim() || statusCell?.textContent?.trim() || '';
-      const isVisible = filterDomain(domainName, statusText, { ...debouncedFilters, compiledRegex });
+      const isVisible = filterDomain(originalDomain, statusText, { ...debouncedFilters, compiledRegex });
       
       // Use Data Attributes instead of direct style.display
       if (isVisible) {
@@ -620,6 +649,13 @@ export default function Sidebar() {
           count++;
       } else {
           row.setAttribute('data-dpt-filtered', 'true');
+      }
+
+      // Apply Keyword Highlighting
+      if (isVisible && highlightRegex) {
+          domainLink.innerHTML = originalDomain.replace(highlightRegex, '<mark class="dpt-highlight">$1</mark>');
+      } else {
+          domainLink.textContent = originalDomain;
       }
 
       // Apply Heatmap via CSS Variables & Data Attributes
@@ -671,7 +707,7 @@ export default function Sidebar() {
         rows.forEach(row => fragment.appendChild(row));
         tbody.appendChild(fragment);
     }
-  }, [debouncedFilters, sortConfig, isHeatmapEnabled, tableVersion, compiledRegex, isEnabled]);
+  }, [debouncedFilters, sortConfig, isHeatmapEnabled, tableVersion, compiledRegex, highlightRegex, isEnabled]);
 
   useEffect(() => {
     const styleId = 'domain-powertools-col-styles';
@@ -691,6 +727,14 @@ export default function Sidebar() {
         border-left: 2px solid rgba(148, 163, 184, 0.4) !important; 
         border-right: 2px solid rgba(148, 163, 184, 0.4) !important; 
         background-color: rgba(148, 163, 184, 0.1) !important; 
+      }
+      .dpt-highlight {
+        background-color: rgba(20, 184, 166, 0.15);
+        color: #0f172a;
+        font-weight: 700;
+        padding: 0 1px;
+        border-radius: 2px;
+        border-bottom: 1.5px solid rgba(20, 184, 166, 0.5);
       }
     `;
 
@@ -1193,6 +1237,17 @@ export default function Sidebar() {
                                 <div className="w-8 h-4 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-teal-500"></div>
                             </div>
                         </label>
+                        <div className="space-y-1">
+                            <label className="text-xs text-slate-400">Highlight Keywords</label>
+                            <input 
+                                type="text" 
+                                value={filters.highlightKeywords} 
+                                onChange={(e) => updateFilter('highlightKeywords', e.target.value)} 
+                                className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-colors" 
+                                placeholder="e.g. tech, ai, shop"
+                                title="Enter keywords separated by commas to highlight them in teal within domain names."
+                            />
+                        </div>
                         <div className="space-y-1">
                             <label className="text-xs text-slate-400 flex items-center gap-1">
                                 Custom Pattern
