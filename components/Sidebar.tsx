@@ -257,7 +257,7 @@ export default function Sidebar() {
         
         cols.forEach(col => {
             const uniqueValues = new Set<string>();
-            rows.forEach(row => {
+            originalRowsRef.current.forEach(row => {
                 const val = row.querySelector(`td.${col.className}`)?.textContent?.trim() || '';
                 uniqueValues.add(val);
             });
@@ -265,10 +265,10 @@ export default function Sidebar() {
         });
         setVariedColumnClasses(Array.from(variedColsSet));
 
-        rows.forEach(row => {
+        originalRowsRef.current.forEach(row => {
             const domainLink = row.querySelector(DOMAIN_LINK_SELECTOR);
             if (domainLink) {
-                const fullDomain = domainLink.getAttribute('title')?.trim() || domainLink.textContent?.trim() || '';
+                const fullDomain = domainLink.getAttribute('data-dpt-original') || domainLink.getAttribute('title')?.trim() || domainLink.textContent?.trim() || '';
                 const { tld } = splitDomain(fullDomain);
                 if (tld) {
                     tldMap.set(tld, (tldMap.get(tld) || 0) + 1);
@@ -287,6 +287,30 @@ export default function Sidebar() {
         isScanning.current = false;
     }
   }, [isEnabled]);
+
+  const allTldsToDisplay = useMemo(() => {
+    const activeTlds = filters.tldFilter.split(',').map(s => s.trim().toLowerCase().replace(/^\./, '')).filter(Boolean);
+    const activeSet = new Set(activeTlds);
+    
+    // Start with detected ones
+    const combined = [...detectedTlds];
+    
+    // Add any active ones that aren't in detected so the user can see they are 'on'
+    activeTlds.forEach(tld => {
+        if (!combined.find(d => d.tld === tld)) {
+            combined.push({ tld, count: 0 });
+        }
+    });
+
+    // Sort: Active first, then by count desc
+    return combined.sort((a, b) => {
+        const aActive = activeSet.has(a.tld);
+        const bActive = activeSet.has(b.tld);
+        if (aActive && !bActive) return -1;
+        if (!aActive && bActive) return 1;
+        return b.count - a.count;
+    });
+  }, [detectedTlds, filters.tldFilter]);
 
   // --- Pagination (Instant Navigation) ---
   const applyPageUpdate = useCallback((tbodyHtml: string, pagerHtml: string, url: string, isPopState: boolean = false) => {
@@ -368,6 +392,9 @@ export default function Sidebar() {
       if (!isPopState) {
         window.history.pushState({ dptAjax: true }, '', url);
       }
+
+      // FORCE SCAN: Ensure detected TLDs are updated for the new page immediately
+      scanTable(true);
 
       const table = document.querySelector(TABLE_SELECTOR);
       if (table) {
@@ -793,30 +820,6 @@ export default function Sidebar() {
     }
     setTldInput('');
   };
-
-  const allTldsToDisplay = useMemo(() => {
-    const activeTlds = filters.tldFilter.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-    const activeSet = new Set(activeTlds);
-    
-    // Start with detected ones
-    const combined = [...detectedTlds];
-    
-    // Add any active ones that aren't in detected
-    activeTlds.forEach(tld => {
-        if (!combined.find(d => d.tld === tld)) {
-            combined.push({ tld, count: 0 });
-        }
-    });
-
-    // Sort: Active first, then by count desc
-    return combined.sort((a, b) => {
-        const aActive = activeSet.has(a.tld);
-        const bActive = activeSet.has(b.tld);
-        if (aActive && !bActive) return -1;
-        if (!aActive && bActive) return 1;
-        return b.count - a.count;
-    });
-  }, [detectedTlds, filters.tldFilter]);
 
   const copyVisible = async () => {
     const domains: string[] = [];
