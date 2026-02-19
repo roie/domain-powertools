@@ -116,12 +116,11 @@ export default function Sidebar() {
   // --- Feature States ---
   const [isHeatmapEnabled, setIsHeatmapEnabled] = useState(false);
   const [isPresetsEnabled, setIsPresetsEnabled] = useState(false);
-  const [isInstantNavEnabled, setIsInstantNavEnabled] = useState(true);
+  const [isInstantNavEnabled, setIsInstantNavEnabled] = useState(false);
   const [tableVersion, setTableVersion] = useState(0);
   const [isEnabled, setIsEnabled] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
-  const [isSwapping, setIsSwapping] = useState(false);
   const [hasTable, setHasTable] = useState(false);
 
   // Check for table existence
@@ -194,7 +193,6 @@ export default function Sidebar() {
   const originalRowsRef = useRef<HTMLTableRowElement[]>([]);
   const isScanning = useRef(false);
   const pageCache = useRef<Map<string, { tbody: string; pager: string }>>(new Map());
-  const fetchPageRef = useRef<any>(null);
 
   const scanTable = useCallback((force: boolean = false) => {
     if (isScanning.current) return;
@@ -282,14 +280,13 @@ export default function Sidebar() {
     const pagers = document.querySelectorAll('.listingpager');
     
     if (tbody && pagers.length > 0) {
-      setIsSwapping(true);
-      document.body.classList.add('dpt-swapping');
-
+      // 1. Create a virtual container to do all the work in the background
       const tempTbody = document.createElement('tbody');
       tempTbody.innerHTML = tbodyHtml;
       const rows = Array.from(tempTbody.querySelectorAll('tr')) as HTMLTableRowElement[];
       let count = 0;
 
+      // 2. Pre-Filter and Pre-Heat in the background
       rows.forEach((row) => {
         const domainLink = row.querySelector(DOMAIN_LINK_SELECTOR); 
         const statusCell = row.querySelector(STATUS_CELL_SELECTOR);
@@ -297,15 +294,17 @@ export default function Sidebar() {
         const domainName = domainLink.getAttribute('title')?.trim() || domainLink.textContent?.trim() || '';
         const statusText = statusCell?.querySelector('a')?.textContent?.trim() || statusCell?.textContent?.trim() || '';
         
-        const isVisible = filterDomain(domainName, statusText, { ...debouncedFilters, compiledRegex });
+        const isVisible = filterDomain(domainName, statusText, { ...filters, compiledRegex });
         if (!isVisible) {
             row.setAttribute('data-dpt-filtered', 'true');
         } else {
+            row.removeAttribute('data-dpt-filtered');
             count++;
         }
 
         if (isHeatmapEnabled) {
             row.querySelectorAll('td').forEach(cell => {
+                cell.removeAttribute('data-dpt-sorted');
                 const className = Array.from(cell.classList).find(c => c.startsWith('field_')) as string;
                 if (className) {
                     const color = getHeatColor(className, cell.textContent?.trim() || '');
@@ -318,26 +317,29 @@ export default function Sidebar() {
         }
       });
 
-      // Update cache with filtered nodes BEFORE swap
-      originalRowsRef.current = rows;
+      // 3. Pre-Sort in the background
+      let finalRows = rows;
+      if (sortConfig.column) {
+        finalRows = sortRows(rows, sortConfig.column, sortConfig.direction);
+        finalRows.forEach(row => {
+            const cell = row.querySelector(`td.${sortConfig.column}`);
+            if (cell) cell.setAttribute('data-dpt-sorted', 'true');
+        });
+      }
+
+      // 4. ATOMIC SWAP: The screen only changes at this exact line
+      originalRowsRef.current = finalRows;
+      tbody.replaceChildren(...finalRows);
       
-      // Atomic swap for table
-      tbody.replaceChildren(...Array.from(tempTbody.childNodes));
-      
-      // SYNC ALL PAGERS (Top and Bottom)
-      // Extract fresh pagers from the source HTML string to handle potentially different content in top/bottom
+      // Sync Pagers
       const parser = new DOMParser();
       const sourceDoc = parser.parseFromString(`<!DOCTYPE html><html><body>${pagerHtml}</body></html>`, 'text/html');
       const freshPagers = sourceDoc.querySelectorAll('.listingpager');
-
       pagers.forEach((oldPager, index) => {
         const freshSource = freshPagers[index] || freshPagers[0];
-        if (freshSource) {
-            oldPager.innerHTML = freshSource.innerHTML;
-        }
+        if (freshSource) oldPager.innerHTML = freshSource.innerHTML;
       });
       
-      // Manually set visible count to avoid triggering the main useEffect redundant pass
       setVisibleCount(count);
 
       if (!isPopState) {
@@ -351,13 +353,8 @@ export default function Sidebar() {
             window.scrollTo({ top: tableTop, behavior: 'smooth' });
         }
       }
-
-      setTimeout(() => {
-        setIsSwapping(false);
-        document.body.classList.remove('dpt-swapping');
-      }, 150);
     }
-  }, [debouncedFilters, compiledRegex, isHeatmapEnabled]);
+  }, [filters, sortConfig, isHeatmapEnabled, compiledRegex]);
 
   const fetchPage = useCallback(async (url: string, isPopState: boolean = false) => {
     if (!isEnabled || !isInstantNavEnabled || isLoading) {
@@ -365,11 +362,15 @@ export default function Sidebar() {
       return;
     }
 
+    const table = document.querySelector(TABLE_SELECTOR) as HTMLElement;
+    if (table) {
+        table.style.minHeight = `${table.offsetHeight}px`;
+    }
+
     setIsLoading(true);
     setLoadingProgress(5);
     document.body.classList.add('dpt-loading');
     
-    // Smooth fake progress
     const progressTimer = setInterval(() => {
       setLoadingProgress(prev => {
         if (prev >= 90) return prev;
@@ -385,7 +386,6 @@ export default function Sidebar() {
       const doc = parser.parseFromString(html, 'text/html');
 
       const newTbody = doc.querySelector(`${TABLE_SELECTOR} tbody`);
-      // Use a more robust way to grab all pagers
       const pagerContainer = doc.createElement('div');
       doc.querySelectorAll('.listingpager').forEach(p => pagerContainer.appendChild(p.cloneNode(true)));
 
@@ -402,6 +402,7 @@ export default function Sidebar() {
           setTimeout(() => {
             setIsLoading(false);
             setLoadingProgress(0);
+            if (table) table.style.minHeight = '';
           }, 300);
         }, 150);
       } else {
@@ -413,11 +414,9 @@ export default function Sidebar() {
     } finally {
       clearInterval(progressTimer);
       document.body.classList.remove('dpt-loading');
+      if (table && !isLoading) table.style.minHeight = '';
     }
   }, [isEnabled, isInstantNavEnabled, isLoading, applyPageUpdate]);
-
-  const windowListenerRef = useRef<(e: MessageEvent) => void>(null);
-  const messageListenerRef = useRef<(msg: any, sender: any, sendResponse: any) => void>(null);
 
   // 1. Initial Load (Once on Mount)
   useEffect(() => {
@@ -461,7 +460,7 @@ export default function Sidebar() {
             if (res.dpt_sort_config) setSortConfig(res.dpt_sort_config);
             if (res.dpt_heatmap !== undefined) setIsHeatmapEnabled(res.dpt_heatmap);
             if (res.dpt_presets_enabled !== undefined) setIsPresetsEnabled(res.dpt_presets_enabled);
-            if (res.dpt_instant_nav !== undefined) setIsInstantNavEnabled(res.dpt_instant_nav);
+            setIsInstantNavEnabled(res.dpt_instant_nav === true); // Default false
             
             // Expansion States
             if (res.dpt_exp_name !== undefined) setIsNameExpanded(res.dpt_exp_name);
@@ -472,7 +471,6 @@ export default function Sidebar() {
         } catch (e) {
             console.error("Domain Powertools: Failed to load settings", e);
         } finally {
-            // Delay marking as loaded to let React finish its first render cycle
             setTimeout(() => { isLoaded.current = true; }, 200);
         }
     };
@@ -481,24 +479,31 @@ export default function Sidebar() {
     const listener = (msg: any, sender: any, sendResponse: any) => {
         if (msg.type === 'DPT_POWER_TOGGLE') setIsEnabled(msg.enabled);
         if (msg.type === 'DPT_STATUS_CHECK') sendResponse({ active: true });
-        if (msg.type === 'DPT_NAVIGATE') fetchPage(msg.url);
+        if (msg.type === 'DPT_NAVIGATE') {
+            window.dispatchEvent(new CustomEvent('dpt-navigate-internal', { detail: { url: msg.url } }));
+        }
     };
-    messageListenerRef.current = listener;
     browser.runtime.onMessage.addListener(listener);
 
     const windowListener = (e: MessageEvent) => {
       if (e.data?.type === 'DPT_NAVIGATE_UI') {
-        fetchPage(e.data.url);
+        window.dispatchEvent(new CustomEvent('dpt-navigate-internal', { detail: { url: e.data.url } }));
       }
     };
-    windowListenerRef.current = windowListener;
     window.addEventListener('message', windowListener);
 
     return () => {
       browser.runtime.onMessage.removeListener(listener);
       window.removeEventListener('message', windowListener);
     };
-  }, []); // Empty dependency array break the loop!
+  }, []);
+
+  // Reactive Navigation Bridge
+  useEffect(() => {
+    const handleNav = (e: any) => fetchPage(e.detail.url);
+    window.addEventListener('dpt-navigate-internal', handleNav);
+    return () => window.removeEventListener('dpt-navigate-internal', handleNav);
+  }, [fetchPage]);
 
   // 2. Unified Debounced Save
   useEffect(() => {
@@ -583,7 +588,7 @@ export default function Sidebar() {
 
   useEffect(() => {
     const tbody = document.querySelector(`${TABLE_SELECTOR} tbody`);
-    if (!tbody || originalRowsRef.current.length === 0 || isScanning.current) return;
+    if (!tbody || originalRowsRef.current.length === 0 || isScanning.current || isLoading) return;
 
     if (!isEnabled) {
       originalRowsRef.current.forEach(row => {
@@ -591,6 +596,7 @@ export default function Sidebar() {
         row.querySelectorAll('td').forEach(cell => {
           cell.style.removeProperty('--dpt-heat-color');
           cell.removeAttribute('data-dpt-heat');
+          cell.removeAttribute('data-dpt-sorted');
           cell.style.backgroundColor = '';
         });
       });
@@ -619,6 +625,9 @@ export default function Sidebar() {
       // Apply Heatmap via CSS Variables & Data Attributes
       const cells = row.querySelectorAll('td');
       cells.forEach(cell => {
+          // Clear previous sort highlight
+          cell.removeAttribute('data-dpt-sorted');
+
           if (!isHeatmapEnabled) {
               cell.style.removeProperty('--dpt-heat-color');
               cell.removeAttribute('data-dpt-heat');
@@ -645,11 +654,17 @@ export default function Sidebar() {
     });
 
     setVisibleCount(count);
-    if (sortConfig.column) rows = sortRows(rows, sortConfig.column, sortConfig.direction);
+    if (sortConfig.column) {
+        rows = sortRows(rows, sortConfig.column, sortConfig.direction);
+        rows.forEach(row => {
+            const cell = row.querySelector(`td.${sortConfig.column}`);
+            if (cell) cell.setAttribute('data-dpt-sorted', 'true');
+        });
+    }
     
     // Optimization: Only re-append rows if sorting is active OR if the DOM order is out of sync
     const firstRow = tbody.firstElementChild;
-    const shouldReorder = sortConfig.column || (rows.length > 0 && firstRow !== rows[0]);
+    const shouldReorder = sortConfig.column || (rows.length > 0 && firstRow !== rows[0]) || tableVersion > 0;
 
     if (shouldReorder) {
         const fragment = document.createDocumentFragment();
@@ -667,12 +682,16 @@ export default function Sidebar() {
       document.head.appendChild(styleTag);
     }
     const hiddenRules = hiddenColumns.map(c => `${TABLE_SELECTOR} th.${c.replace('field_', 'head_')}, ${TABLE_SELECTOR} td.${c} { display: none !important; }`).join('\n');
-    let highlightRule = sortConfig.column ? `${TABLE_SELECTOR} td.${sortConfig.column} { border-left: 2px solid rgba(148, 163, 184, 0.4) !important; border-right: 2px solid rgba(148, 163, 184, 0.4) !important; background-color: #e8e8e8; }` : '';
     
     // Core Filter & Heatmap Styles
     const coreStyles = `
       ${TABLE_SELECTOR} tr[data-dpt-filtered="true"] { display: none !important; }
       ${TABLE_SELECTOR} td[data-dpt-heat="true"] { background-color: var(--dpt-heat-color) !important; transition: background-color 0.2s; }
+      ${TABLE_SELECTOR} td[data-dpt-sorted="true"] { 
+        border-left: 2px solid rgba(148, 163, 184, 0.4) !important; 
+        border-right: 2px solid rgba(148, 163, 184, 0.4) !important; 
+        background-color: rgba(148, 163, 184, 0.1) !important; 
+      }
     `;
 
     // Layout Push Styles
@@ -694,17 +713,15 @@ export default function Sidebar() {
       /* Table Stabilization during AJAX swap */
       body.dpt-loading ${TABLE_SELECTOR},
       body.dpt-swapping ${TABLE_SELECTOR} {
-        opacity: 0.3 !important;
+        opacity: 0.4 !important;
         pointer-events: none;
-        min-height: 600px;
       }
       ${TABLE_SELECTOR} {
-        transition: opacity 0.5s ease-in-out;
-        will-change: opacity;
+        transition: opacity 0.3s ease-in-out;
       }
     `;
 
-    styleTag.textContent = [hiddenRules, highlightRule, coreStyles, layoutStyles].join('\n');
+    styleTag.textContent = [hiddenRules, coreStyles, layoutStyles].join('\n');
   }, [hiddenColumns, sortConfig.column]);
 
   // --- Handlers ---
