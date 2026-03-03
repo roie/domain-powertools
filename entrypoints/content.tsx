@@ -22,10 +22,11 @@ export default defineContentScript({
     await updateStateFromStorage();
 
     // Listen for setting changes in real-time
-    browser.storage.onChanged.addListener((changes) => {
+    const storageListener = (changes: Record<string, any>) => {
       if (changes.dpt_instant_nav) isInstantNavEnabled = changes.dpt_instant_nav.newValue !== false;
       if (changes.dpt_enabled) isExtensionEnabled = changes.dpt_enabled.newValue !== false;
-    });
+    };
+    browser.storage.onChanged.addListener(storageListener);
 
     const ui = await createShadowRootUi(ctx, {
       name: 'domain-powertools-sidebar',
@@ -77,5 +78,11 @@ export default defineContentScript({
 
     document.addEventListener('click', handlePaginationClick, true);
     window.addEventListener('popstate', handlePopState);
+
+    ctx.onInvalidated(() => {
+      browser.storage.onChanged.removeListener(storageListener);
+      document.removeEventListener('click', handlePaginationClick, true);
+      window.removeEventListener('popstate', handlePopState);
+    });
   },
 });
