@@ -18,6 +18,12 @@ export type FilterState = {
   // TLD & Status
   tldFilter: string; // Comma separated
   statusFilter: string; 
+
+  // Visual
+  highlightKeywords: string; // Comma separated
+
+  // Pre-compiled objects for performance
+  compiledRegex?: RegExp | null;
 };
 
 export const filterDomain = (
@@ -25,23 +31,18 @@ export const filterDomain = (
   status: string,     
   filters: FilterState
 ): boolean => {
-  const parts = domainName.toLowerCase().split('.');
-  const sld = parts[0]; 
-  const tld = parts.slice(1).join('.'); 
+  const { sld, tld } = splitDomain(domainName); 
 
   // 1. Length (IMPORTANT: USER REQUESTED THIS FIRST)
   if (filters.minLength !== '' && sld.length < Number(filters.minLength)) return false;
   if (filters.maxLength !== '' && sld.length > Number(filters.maxLength)) return false;
 
   // 2. Text Match (with Regex Support)
-  if (filters.matchText) {
-    try {
-      const regex = new RegExp(filters.matchText, 'i');
-      if (!regex.test(sld)) return false;
-    } catch (e) {
-      // Fallback to simple includes if regex is invalid
-      if (!sld.includes(filters.matchText.toLowerCase())) return false;
-    }
+  if (filters.compiledRegex) {
+    if (!filters.compiledRegex.test(sld)) return false;
+  } else if (filters.matchText) {
+    // Fallback if regex failed to compile or wasn't pre-compiled
+    if (!sld.includes(filters.matchText.toLowerCase())) return false;
   }
   
   if (filters.startsWith && !sld.startsWith(filters.startsWith.toLowerCase())) return false;
@@ -87,11 +88,10 @@ export const filterDomain = (
 
   // 7. TLD
   if (filters.tldFilter) {
-    const tlds = filters.tldFilter.toLowerCase().split(',').map(s => s.trim()).filter(s => s.length > 0);
-    if (tlds.length > 0) {
-        // Match if TLD is in the list. Some domains might be .com.au, so we check inclusion or exact.
-        // Usually users want exact match on the TLD part.
-        if (!tlds.some(t => t === tld || t === '.' + tld)) return false;
+    const activeTlds = filters.tldFilter.toLowerCase().split(',').map(s => s.trim().replace(/^\./, '')).filter(Boolean);
+    if (activeTlds.length > 0) {
+        // Exact match on the extracted TLD part
+        if (!activeTlds.includes(tld)) return false;
     }
   }
 
@@ -101,6 +101,21 @@ export const filterDomain = (
   }
 
   return true;
+};
+
+/**
+ * Splits a domain into SLD (name) and TLD (extension).
+ * Based on the fact that expireddomains.net does not list subdomains,
+ * the first dot is the delimiter between the name and the extension.
+ */
+export const splitDomain = (domain: string): { sld: string; tld: string } => {
+  const firstDotIndex = domain.indexOf('.');
+  if (firstDotIndex === -1) return { sld: domain, tld: '' };
+  
+  return {
+    sld: domain.substring(0, firstDotIndex).toLowerCase(),
+    tld: domain.substring(firstDotIndex + 1).toLowerCase()
+  };
 };
 
 const extractSortValue = (cell: Element | null, columnClass: string = ''): number | string => {
@@ -118,13 +133,21 @@ const extractSortValue = (cell: Element | null, columnClass: string = ''): numbe
       const lower = raw.toLowerCase();
 
       // A. Relative Dates (Today/Yesterday/X days)
-      if (lower.startsWith('today')) {
-        const timePart = lower.replace('today', '').trim();
-        return new Date().setHours(0,0,0,0) + (timePart ? parseInt(timePart.replace(':', '')) : 9999); 
-      }
-      if (lower.startsWith('yesterday')) {
-        const timePart = lower.replace('yesterday', '').trim();
-        return new Date(Date.now() - 86400000).setHours(0,0,0,0) + (timePart ? parseInt(timePart.replace(':', '')) : 9999);
+      if (lower.startsWith('today') || lower.startsWith('yesterday')) {
+        const isYesterday = lower.startsWith('yesterday');
+        const date = new Date();
+        if (isYesterday) date.setDate(date.getDate() - 1);
+        date.setHours(0, 0, 0, 0);
+        
+        const timePart = lower.replace(isYesterday ? 'yesterday' : 'today', '').trim();
+        if (timePart) {
+            const [h, m] = timePart.split(':').map(n => parseInt(n));
+            if (!isNaN(h)) date.setHours(h, isNaN(m) ? 0 : m);
+        } else {
+            // If no time, assume end of day for "Today" so it sorts above earlier times if descending
+            date.setHours(23, 59, 59, 999);
+        }
+        return date.getTime();
       }
       const daysMatch = lower.match(/^(\d+)\s+days?$/);
       if (daysMatch) {

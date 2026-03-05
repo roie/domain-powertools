@@ -1,10 +1,12 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { browser } from 'wxt/browser';
-import { FilterState, filterDomain, sortRows, getHeatColor } from './FilterEngine';
+import { FilterState, filterDomain, sortRows, getHeatColor, splitDomain } from './FilterEngine';
 
 const TABLE_SELECTOR = '#listing table.base1';
 const DOMAIN_LINK_SELECTOR = 'td.field_domain a';
 const STATUS_CELL_SELECTOR = 'td.field_whois';
+
+const openExternal = (url: string) => window.open(url, '_blank');
 
 interface ColumnDef {
   label: string;
@@ -39,6 +41,7 @@ const DEFAULT_FILTERS: FilterState = {
   pattern: '',
   tldFilter: '',
   statusFilter: 'Any',
+  highlightKeywords: '',
 };
 
 const DEFAULT_PRESET_LIST: Preset[] = [
@@ -116,8 +119,140 @@ export default function Sidebar() {
   // --- Feature States ---
   const [isHeatmapEnabled, setIsHeatmapEnabled] = useState(false);
   const [isPresetsEnabled, setIsPresetsEnabled] = useState(false);
+  const [isInstantNavEnabled, setIsInstantNavEnabled] = useState(false);
+  const [isQuickActionsEnabled, setIsQuickActionsEnabled] = useState(false);
   const [tableVersion, setTableVersion] = useState(0);
   const [isEnabled, setIsEnabled] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [hasTable, setHasTable] = useState(false);
+
+  // --- Quick Actions Singleton State ---
+  const [hoveredData, setHoveredData] = useState<{ domain: string, rect: DOMRect } | null>(null);
+  const [quickCopySuccess, setQuickCopySuccess] = useState(false);
+  const hideTimeout = useRef<NodeJS.Timeout | null>(null);
+  const showTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  const clearTimeouts = () => {
+    if (hideTimeout.current) clearTimeout(hideTimeout.current);
+    if (showTimeout.current) clearTimeout(showTimeout.current);
+  };
+
+  const showMenu = (domain: string, rect: DOMRect) => {
+    clearTimeouts();
+    // Tiny delay to ensure we don't pop up while just passing through
+    showTimeout.current = setTimeout(() => {
+        setHoveredData({ domain, rect });
+    }, 80);
+  };
+
+  const hideMenu = (immediate = false) => {
+    clearTimeouts();
+    if (immediate) {
+        setHoveredData(null);
+        setQuickCopySuccess(false);
+    } else {
+        hideTimeout.current = setTimeout(() => {
+            setHoveredData(null);
+            setQuickCopySuccess(false);
+        }, 400); // Generous grace period to move from cell to menu
+    }
+  };
+
+  // Check for table existence
+  useEffect(() => {
+    const check = () => {
+      const exists = !!document.querySelector(TABLE_SELECTOR);
+      setHasTable(exists);
+    };
+    check();
+    const interval = setInterval(check, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Hover detection for Quick Actions (Shadow-piercing Singleton)
+  useEffect(() => {
+    if (!isEnabled || !isQuickActionsEnabled) {
+      hideMenu(true);
+      return;
+    }
+
+    const handleMouseOver = (e: MouseEvent) => {
+      const path = e.composedPath();
+      let cell: HTMLElement | null = null;
+      let isOverMenu = false;
+
+      for (const el of path) {
+        if (!(el instanceof HTMLElement)) continue;
+        if (el.classList.contains('field_domain')) {
+          cell = el;
+          break;
+        }
+        if (el.classList.contains('dpt-quick-actions')) {
+          isOverMenu = true;
+          break;
+        }
+      }
+
+      if (cell) {
+        const link = cell.querySelector('a');
+        if (link) {
+          const domain = link.getAttribute('data-dpt-original') || link.textContent?.trim() || '';
+          if (domain) {
+            // If it's the same domain, just keep it open
+            if (hoveredData?.domain === domain) {
+                if (hideTimeout.current) clearTimeout(hideTimeout.current);
+            } else {
+                showMenu(domain, cell.getBoundingClientRect());
+            }
+          }
+        }
+      } else if (!isOverMenu) {
+        hideMenu();
+      } else {
+        // Over menu, clear any pending hide
+        if (hideTimeout.current) clearTimeout(hideTimeout.current);
+      }
+    };
+
+    document.addEventListener('mouseover', handleMouseOver);
+    return () => {
+        document.removeEventListener('mouseover', handleMouseOver);
+        clearTimeouts();
+    };
+  }, [isEnabled, isQuickActionsEnabled, hoveredData?.domain]);
+
+  // Debounce filters for performance
+  const [debouncedFilters, setDebouncedFilters] = useState(filters);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+        setDebouncedFilters(filters);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [filters]);
+
+  // Pre-compile Regex for performance
+  const compiledRegex = useMemo(() => {
+    if (!debouncedFilters.matchText) return null;
+    try {
+      return new RegExp(debouncedFilters.matchText, 'i');
+    } catch (e) {
+      return null;
+    }
+  }, [debouncedFilters.matchText]);
+
+  const highlightRegex = useMemo(() => {
+    if (!debouncedFilters.highlightKeywords) return null;
+    const terms = debouncedFilters.highlightKeywords.split(',')
+      .map(s => s.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) // Escape regex special chars
+      .filter(Boolean);
+    if (terms.length === 0) return null;
+    try {
+      return new RegExp(`(${terms.join('|')})`, 'gi');
+    } catch (e) {
+      return null;
+    }
+  }, [debouncedFilters.highlightKeywords]);
 
   // --- Collapsible UI States ---
   const [isNameExpanded, setIsNameExpanded] = useState(true);
@@ -150,109 +285,40 @@ export default function Sidebar() {
     if (filters.pattern) count++;
     if (isHeatmapEnabled) count++;
     if (isPresetsEnabled) count++;
+    if (isInstantNavEnabled) count++;
     return count;
-  }, [filters.pattern, isHeatmapEnabled, isPresetsEnabled]);
+  }, [filters.pattern, isHeatmapEnabled, isPresetsEnabled, isInstantNavEnabled]);
 
   // --- Persistence Logic ---
   const isLoaded = useRef(false);
   const originalRowsRef = useRef<HTMLTableRowElement[]>([]);
+  const isScanning = useRef(false);
+  const pageCache = useRef<Map<string, { tbody: string; pager: string }>>(new Map());
 
-  // 1. Initial Load (Once on Mount)
-  useEffect(() => {
-    const loadAll = async () => {
-        try {
-            if (!browser.storage?.local) {
-                isLoaded.current = true;
-                return;
-            }
-            const res = await browser.storage.local.get([
-                'dpt_filters', 
-                'dpt_presets', 
-                'dpt_active_preset', 
-                'dpt_hidden_columns', 
-                'dpt_sort_config',
-                'dpt_heatmap',
-                'dpt_presets_enabled',
-                'dpt_exp_name',
-                'dpt_exp_tld',
-                'dpt_exp_adv',
-                'dpt_exp_cols',
-                'dpt_initialized',
-                'dpt_enabled'
-            ]) as any;
-            
-            if (res.dpt_filters) setFilters(res.dpt_filters);
-            if (res.dpt_enabled !== undefined) setIsEnabled(res.dpt_enabled);
-            
-            // First Run Logic
-            if (!res.dpt_initialized) {
-                setPresets(DEFAULT_PRESET_LIST);
-                browser.storage.local.set({ dpt_initialized: true, dpt_presets: DEFAULT_PRESET_LIST });
-            } else {
-                if (res.dpt_presets) setPresets(res.dpt_presets);
-            }
-            
-            if (res.dpt_active_preset) setActivePresetName(res.dpt_active_preset);
-            if (res.dpt_hidden_columns) setHiddenColumns(res.dpt_hidden_columns);
-            if (res.dpt_sort_config) setSortConfig(res.dpt_sort_config);
-            if (res.dpt_heatmap !== undefined) setIsHeatmapEnabled(res.dpt_heatmap);
-            if (res.dpt_presets_enabled !== undefined) setIsPresetsEnabled(res.dpt_presets_enabled);
-            
-            // Expansion States
-            if (res.dpt_exp_name !== undefined) setIsNameExpanded(res.dpt_exp_name);
-            if (res.dpt_exp_tld !== undefined) setIsTldExpanded(res.dpt_exp_tld);
-            if (res.dpt_exp_adv !== undefined) setIsAdvancedExpanded(res.dpt_exp_adv);
-            if (res.dpt_exp_cols !== undefined) setIsColumnsExpanded(res.dpt_exp_cols);
-            
-        } catch (e) {
-            console.error("Domain Powertools: Failed to load settings", e);
-        } finally {
-            // Delay marking as loaded to let React finish its first render cycle
-            setTimeout(() => { isLoaded.current = true; }, 200);
-        }
-    };
-    loadAll();
+  const scanTable = useCallback((force: boolean = false) => {
+    if (isScanning.current) return;
+    isScanning.current = true;
 
-    const listener = (msg: any, sender: any, sendResponse: any) => {
-        if (msg.type === 'DPT_POWER_TOGGLE') setIsEnabled(msg.enabled);
-        if (msg.type === 'DPT_STATUS_CHECK') sendResponse({ active: true });
-    };
-    browser.runtime.onMessage.addListener(listener);
-    return () => browser.runtime.onMessage.removeListener(listener);
-  }, []);
-
-  // 2. Unified Debounced Save
-  useEffect(() => {
-    if (!isLoaded.current) return;
-
-    const timer = setTimeout(() => {
-        browser.storage.local.set({
-            dpt_filters: filters,
-            dpt_presets: presets,
-            dpt_active_preset: activePresetName,
-            dpt_hidden_columns: hiddenColumns,
-            dpt_sort_config: sortConfig,
-            dpt_heatmap: isHeatmapEnabled,
-            dpt_presets_enabled: isPresetsEnabled,
-            dpt_exp_name: isNameExpanded,
-            dpt_exp_tld: isTldExpanded,
-            dpt_exp_adv: isAdvancedExpanded,
-            dpt_exp_cols: isColumnsExpanded,
-            dpt_enabled: isEnabled
-        });
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [filters, presets, activePresetName, hiddenColumns, sortConfig, isHeatmapEnabled, isPresetsEnabled, isNameExpanded, isTldExpanded, isAdvancedExpanded, isColumnsExpanded, isEnabled]);
-
-  // --- DOM Detection (Mount & MutationObserver) ---
-  useEffect(() => {
-    if (!isEnabled) return;
-    const scanTable = () => {
+    try {
         const tbody = document.querySelector(`${TABLE_SELECTOR} tbody`);
-        if (tbody) {
-            originalRowsRef.current = Array.from(tbody.querySelectorAll('tr')) as HTMLTableRowElement[];
+        if (!tbody) {
+            isScanning.current = false;
+            return;
         }
+
+        const trs = Array.from(tbody.querySelectorAll('tr')) as HTMLTableRowElement[];
+        
+        // Only update if rows actually changed (prevents loops)
+        const rowsChanged = trs.length !== originalRowsRef.current.length || 
+                           trs[0] !== originalRowsRef.current[0] ||
+                           trs[trs.length-1] !== originalRowsRef.current[originalRowsRef.current.length-1];
+
+        if (!rowsChanged && !force) {
+            isScanning.current = false;
+            return;
+        }
+
+        originalRowsRef.current = trs;
 
         const headers = document.querySelectorAll(`${TABLE_SELECTOR} thead th`);
         const cols: ColumnDef[] = [];
@@ -278,7 +344,7 @@ export default function Sidebar() {
         
         cols.forEach(col => {
             const uniqueValues = new Set<string>();
-            rows.forEach(row => {
+            originalRowsRef.current.forEach(row => {
                 const val = row.querySelector(`td.${col.className}`)?.textContent?.trim() || '';
                 uniqueValues.add(val);
             });
@@ -286,13 +352,12 @@ export default function Sidebar() {
         });
         setVariedColumnClasses(Array.from(variedColsSet));
 
-        rows.forEach(row => {
+        originalRowsRef.current.forEach(row => {
             const domainLink = row.querySelector(DOMAIN_LINK_SELECTOR);
             if (domainLink) {
-                const fullDomain = domainLink.getAttribute('title')?.trim() || domainLink.textContent?.trim() || '';
-                const parts = fullDomain.split('.');
-                if (parts.length > 1) {
-                    const tld = parts.slice(1).join('.');
+                const fullDomain = domainLink.getAttribute('data-dpt-original') || domainLink.getAttribute('title')?.trim() || domainLink.textContent?.trim() || '';
+                const { tld } = splitDomain(fullDomain);
+                if (tld) {
                     tldMap.set(tld, (tldMap.get(tld) || 0) + 1);
                 }
             }
@@ -305,83 +370,461 @@ export default function Sidebar() {
         
         // Trigger a re-render of the table logic
         setTableVersion(v => v + 1);
+    } finally {
+        isScanning.current = false;
+    }
+  }, [isEnabled]);
+
+  const allTldsToDisplay = useMemo(() => {
+    const activeTlds = filters.tldFilter.split(',').map(s => s.trim().toLowerCase().replace(/^\./, '')).filter(Boolean);
+    const activeSet = new Set(activeTlds);
+    
+    // Start with detected ones
+    const combined = [...detectedTlds];
+    
+    // Add any active ones that aren't in detected so the user can see they are 'on'
+    activeTlds.forEach(tld => {
+        if (!combined.find(d => d.tld === tld)) {
+            combined.push({ tld, count: 0 });
+        }
+    });
+
+    // Sort: Active first, then by count desc
+    return combined.sort((a, b) => {
+        const aActive = activeSet.has(a.tld);
+        const bActive = activeSet.has(b.tld);
+        if (aActive && !bActive) return -1;
+        if (!aActive && bActive) return 1;
+        return b.count - a.count;
+    });
+  }, [detectedTlds, filters.tldFilter]);
+
+  // --- Pagination (Instant Navigation) ---
+  const applyPageUpdate = useCallback((tbodyHtml: string, pagerHtml: string, url: string, isPopState: boolean = false) => {
+    const tbody = document.querySelector(`${TABLE_SELECTOR} tbody`);
+    const pagers = document.querySelectorAll('.listingpager');
+    
+    if (tbody && pagers.length > 0) {
+      // 1. Create a virtual container to do all the work in the background
+      const tempTbody = document.createElement('tbody');
+      tempTbody.innerHTML = tbodyHtml;
+      const rows = Array.from(tempTbody.querySelectorAll('tr')) as HTMLTableRowElement[];
+      let count = 0;
+
+      // 2. Pre-Filter and Pre-Heat in the background
+      rows.forEach((row) => {
+        const domainLink = row.querySelector(DOMAIN_LINK_SELECTOR) as HTMLAnchorElement; 
+        const statusCell = row.querySelector(STATUS_CELL_SELECTOR);
+        if (!domainLink) return;
+        
+        // Store original domain name
+        const originalDomain = domainLink.getAttribute('title')?.trim() || domainLink.textContent?.trim() || '';
+        domainLink.setAttribute('data-dpt-original', originalDomain);
+
+        const statusText = statusCell?.querySelector('a')?.textContent?.trim() || statusCell?.textContent?.trim() || '';
+        
+        const isVisible = filterDomain(originalDomain, statusText, { ...filters, compiledRegex });
+        if (!isVisible) {
+            row.setAttribute('data-dpt-filtered', 'true');
+        } else {
+            row.removeAttribute('data-dpt-filtered');
+            count++;
+        }
+
+        // Apply Keyword Highlighting
+        if (isVisible && highlightRegex) {
+            domainLink.innerHTML = originalDomain.replace(highlightRegex, '<mark class="dpt-highlight">$1</mark>');
+        }
+
+        if (isHeatmapEnabled) {
+            row.querySelectorAll('td').forEach(cell => {
+                cell.removeAttribute('data-dpt-sorted');
+                const className = Array.from(cell.classList).find(c => c.startsWith('field_')) as string;
+                if (className) {
+                    const color = getHeatColor(className, cell.textContent?.trim() || '');
+                    if (color) {
+                        cell.style.setProperty('--dpt-heat-color', color);
+                        cell.setAttribute('data-dpt-heat', 'true');
+                    }
+                }
+            });
+        }
+      });
+
+      // 3. Pre-Sort in the background
+      let finalRows = rows;
+      if (sortConfig.column) {
+        finalRows = sortRows(rows, sortConfig.column, sortConfig.direction);
+        finalRows.forEach(row => {
+            const cell = row.querySelector(`td.${sortConfig.column}`);
+            if (cell) cell.setAttribute('data-dpt-sorted', 'true');
+        });
+      }
+
+      // 4. ATOMIC SWAP: The screen only changes at this exact line
+      originalRowsRef.current = finalRows;
+      tbody.replaceChildren(...finalRows);
+      
+      // Sync Pagers
+      const parser = new DOMParser();
+      const sourceDoc = parser.parseFromString(`<!DOCTYPE html><html><body>${pagerHtml}</body></html>`, 'text/html');
+      const freshPagers = sourceDoc.querySelectorAll('.listingpager');
+      pagers.forEach((oldPager, index) => {
+        const freshSource = freshPagers[index] || freshPagers[0];
+        if (freshSource) oldPager.innerHTML = freshSource.innerHTML;
+      });
+      
+      setVisibleCount(count);
+
+      if (!isPopState) {
+        window.history.pushState({ dptAjax: true }, '', url);
+      }
+
+      // FORCE SCAN: Ensure detected TLDs are updated for the new page immediately
+      scanTable(true);
+
+      const table = document.querySelector(TABLE_SELECTOR);
+      if (table) {
+        const tableTop = table.getBoundingClientRect().top + window.scrollY - 20;
+        if (window.scrollY > tableTop) {
+            window.scrollTo({ top: tableTop, behavior: 'smooth' });
+        }
+      }
+    }
+  }, [filters, sortConfig, isHeatmapEnabled, compiledRegex, highlightRegex]);
+
+  const fetchPage = useCallback(async (url: string, isPopState: boolean = false) => {
+    if (!isEnabled || !isInstantNavEnabled || isLoading) {
+      if (!isPopState && url !== window.location.href) window.location.href = url;
+      return;
+    }
+
+    const table = document.querySelector(TABLE_SELECTOR) as HTMLElement;
+    if (table) {
+        table.style.minHeight = `${table.offsetHeight}px`;
+    }
+
+    setIsLoading(true);
+    setLoadingProgress(5);
+    document.body.classList.add('dpt-loading');
+    
+    const progressTimer = setInterval(() => {
+      setLoadingProgress(prev => {
+        if (prev >= 90) return prev;
+        return prev + (90 - prev) * 0.1;
+      });
+    }, 100);
+
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Fetch failed');
+      const html = await response.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+
+      const newTbody = doc.querySelector(`${TABLE_SELECTOR} tbody`);
+      const pagerContainer = doc.createElement('div');
+      doc.querySelectorAll('.listingpager').forEach(p => pagerContainer.appendChild(p.cloneNode(true)));
+
+      if (newTbody && pagerContainer.childNodes.length > 0) {
+        const tbodyHtml = newTbody.innerHTML;
+        const pagerHtml = pagerContainer.innerHTML;
+        pageCache.current.set(url, { tbody: tbodyHtml, pager: pagerHtml });
+        
+        clearInterval(progressTimer);
+        setLoadingProgress(100);
+        
+        setTimeout(() => {
+          applyPageUpdate(tbodyHtml, pagerHtml, url, isPopState);
+          setTimeout(() => {
+            setIsLoading(false);
+            setLoadingProgress(0);
+            if (table) table.style.minHeight = '';
+          }, 300);
+        }, 150);
+      } else {
+        if (!isPopState) window.location.href = url;
+      }
+    } catch (e) {
+      console.error("DPT: AJAX Navigation failed, falling back...", e);
+      if (!isPopState) window.location.href = url;
+    } finally {
+      clearInterval(progressTimer);
+      document.body.classList.remove('dpt-loading');
+      if (table && !isLoading) table.style.minHeight = '';
+    }
+  }, [isEnabled, isInstantNavEnabled, isLoading, applyPageUpdate]);
+
+  // 1. Initial Load (Once on Mount)
+  useEffect(() => {
+    console.log("DPT: Sidebar Mounted");
+    const loadAll = async () => {
+        try {
+            if (!browser.storage?.local) {
+                isLoaded.current = true;
+                return;
+            }
+            const res = await browser.storage.local.get([
+                'dpt_filters', 
+                'dpt_presets', 
+                'dpt_active_preset', 
+                'dpt_hidden_columns', 
+                'dpt_sort_config',
+                'dpt_heatmap',
+                'dpt_presets_enabled',
+                'dpt_instant_nav',
+                'dpt_quick_actions',
+                'dpt_exp_name',
+                'dpt_exp_tld',
+                'dpt_exp_adv',
+                'dpt_exp_cols',
+                'dpt_initialized',
+                'dpt_enabled'
+            ]) as any;
+            
+            if (res.dpt_filters) setFilters(res.dpt_filters);
+            if (res.dpt_enabled !== undefined) setIsEnabled(res.dpt_enabled);
+            
+            // First Run Logic
+            if (!res.dpt_initialized) {
+                setPresets(DEFAULT_PRESET_LIST);
+                browser.storage.local.set({ dpt_initialized: true, dpt_presets: DEFAULT_PRESET_LIST });
+            } else {
+                if (res.dpt_presets) setPresets(res.dpt_presets);
+            }
+            
+            if (res.dpt_active_preset) setActivePresetName(res.dpt_active_preset);
+            if (res.dpt_hidden_columns) setHiddenColumns(res.dpt_hidden_columns);
+            if (res.dpt_sort_config) setSortConfig(res.dpt_sort_config);
+            if (res.dpt_heatmap !== undefined) setIsHeatmapEnabled(res.dpt_heatmap);
+            if (res.dpt_presets_enabled !== undefined) setIsPresetsEnabled(res.dpt_presets_enabled);
+            setIsInstantNavEnabled(res.dpt_instant_nav === true);
+            setIsQuickActionsEnabled(res.dpt_quick_actions === true); // Default false
+            
+            // Expansion States
+            if (res.dpt_exp_name !== undefined) setIsNameExpanded(res.dpt_exp_name);
+            if (res.dpt_exp_tld !== undefined) setIsTldExpanded(res.dpt_exp_tld);
+            if (res.dpt_exp_adv !== undefined) setIsAdvancedExpanded(res.dpt_exp_adv);
+            if (res.dpt_exp_cols !== undefined) setIsColumnsExpanded(res.dpt_exp_cols);
+            
+        } catch (e) {
+            console.error("Domain Powertools: Failed to load settings", e);
+        } finally {
+            setTimeout(() => { isLoaded.current = true; }, 200);
+        }
     };
+    loadAll();
+
+    const listener = (msg: any, sender: any, sendResponse: any) => {
+        if (msg.type === 'DPT_POWER_TOGGLE') setIsEnabled(msg.enabled);
+        if (msg.type === 'DPT_STATUS_CHECK') sendResponse({ active: true });
+        if (msg.type === 'DPT_NAVIGATE') {
+            window.dispatchEvent(new CustomEvent('dpt-navigate-internal', { detail: { url: msg.url } }));
+        }
+    };
+    browser.runtime.onMessage.addListener(listener);
+
+    const windowListener = (e: MessageEvent) => {
+      if (e.data?.type === 'DPT_NAVIGATE_UI') {
+        window.dispatchEvent(new CustomEvent('dpt-navigate-internal', { detail: { url: e.data.url } }));
+      }
+    };
+    window.addEventListener('message', windowListener);
+
+    return () => {
+      browser.runtime.onMessage.removeListener(listener);
+      window.removeEventListener('message', windowListener);
+    };
+  }, []);
+
+  // Reactive Navigation Bridge
+  useEffect(() => {
+    const handleNav = (e: any) => fetchPage(e.detail.url);
+    window.addEventListener('dpt-navigate-internal', handleNav);
+    return () => window.removeEventListener('dpt-navigate-internal', handleNav);
+  }, [fetchPage]);
+
+  // 2. Unified Debounced Save
+  useEffect(() => {
+    if (!isLoaded.current) return;
+
+    const timer = setTimeout(() => {
+        browser.storage.local.set({
+            dpt_filters: filters,
+            dpt_presets: presets,
+            dpt_active_preset: activePresetName,
+            dpt_hidden_columns: hiddenColumns,
+            dpt_sort_config: sortConfig,
+            dpt_heatmap: isHeatmapEnabled,
+            dpt_presets_enabled: isPresetsEnabled,
+            dpt_instant_nav: isInstantNavEnabled,
+            dpt_quick_actions: isQuickActionsEnabled,
+            dpt_exp_name: isNameExpanded,
+            dpt_exp_tld: isTldExpanded,
+            dpt_exp_adv: isAdvancedExpanded,
+            dpt_exp_cols: isColumnsExpanded,
+            dpt_enabled: isEnabled
+        });
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [filters, presets, activePresetName, hiddenColumns, sortConfig, isHeatmapEnabled, isPresetsEnabled, isInstantNavEnabled, isQuickActionsEnabled, isNameExpanded, isTldExpanded, isAdvancedExpanded, isColumnsExpanded, isEnabled]);
+
+  // --- DOM Detection (Mount & MutationObserver) ---
+  useEffect(() => {
+    if (!isEnabled) return;
 
     scanTable();
 
     // Debounced Observer
     let timeout: NodeJS.Timeout;
-    const observer = new MutationObserver(() => {
+    const observer = new MutationObserver((mutations) => {
+        // Ignore mutations caused by our own data attributes (prevents infinite loop)
+        const isSelfMutation = mutations.every(m => 
+            m.type === 'attributes' && 
+            (m.attributeName === 'data-dpt-filtered' || m.attributeName === 'data-dpt-heat' || m.attributeName === 'style')
+        );
+        if (isSelfMutation) return;
+
         clearTimeout(timeout);
-        timeout = setTimeout(scanTable, 150);
+        timeout = setTimeout(() => scanTable(), 150);
     });
 
     // Observe #content or body to catch table replacements
     const target = document.querySelector('#content') || document.body;
-    observer.observe(target, { childList: true, subtree: true });
+    observer.observe(target, { 
+        childList: true, 
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class', 'id'] // Watch for structural changes
+    });
 
     return () => {
         observer.disconnect();
         clearTimeout(timeout);
     };
-  }, []);
+  }, [isEnabled, scanTable]);
 
   // --- Layout & Table Logic ---
   useEffect(() => {
-    if (!isEnabled) {
-        document.body.style.marginRight = '';
+    if (!isEnabled || !hasTable) {
+        document.documentElement.classList.remove('dpt-enabled');
+        document.body.classList.remove('dpt-enabled');
+        document.body.style.removeProperty('--dpt-sidebar-width');
         return;
     }
-    document.body.style.transition = 'margin-right 300ms cubic-bezier(0.4, 0, 0.2, 1)';
-    document.body.style.marginRight = isCollapsed ? '48px' : '320px';
-    return () => { document.body.style.marginRight = ''; };
-  }, [isCollapsed, isEnabled]);
+    
+    document.documentElement.classList.add('dpt-enabled');
+    document.body.classList.add('dpt-enabled');
+    const width = isCollapsed ? '48px' : '320px';
+    document.body.style.setProperty('--dpt-sidebar-width', width);
+
+    return () => {
+        document.documentElement.classList.remove('dpt-enabled');
+        document.body.classList.remove('dpt-enabled');
+        document.body.style.removeProperty('--dpt-sidebar-width');
+    };
+  }, [isCollapsed, isEnabled, hasTable]);
 
   useEffect(() => {
-    if (!isEnabled) return;
     const tbody = document.querySelector(`${TABLE_SELECTOR} tbody`);
-    if (!tbody || originalRowsRef.current.length === 0) return;
+    if (!tbody || originalRowsRef.current.length === 0 || isScanning.current || isLoading) return;
+
+    if (!isEnabled) {
+      originalRowsRef.current.forEach(row => {
+        row.removeAttribute('data-dpt-filtered');
+        row.querySelectorAll('td').forEach(cell => {
+          cell.style.removeProperty('--dpt-heat-color');
+          cell.removeAttribute('data-dpt-heat');
+          cell.removeAttribute('data-dpt-sorted');
+          cell.style.backgroundColor = '';
+        });
+      });
+      return;
+    }
+
     let rows = [...originalRowsRef.current];
     let count = 0;
 
     rows.forEach((row) => {
-      const domainLink = row.querySelector(DOMAIN_LINK_SELECTOR); 
+      const domainLink = row.querySelector(DOMAIN_LINK_SELECTOR) as HTMLAnchorElement; 
       const statusCell = row.querySelector(STATUS_CELL_SELECTOR);
       if (!domainLink) return;
-      const domainName = domainLink.getAttribute('title')?.trim() || domainLink.textContent?.trim() || '';
-      const statusText = statusCell?.querySelector('a')?.textContent?.trim() || statusCell?.textContent?.trim() || '';
-      const isVisible = filterDomain(domainName, statusText, filters);
-      row.style.display = isVisible ? '' : 'none';
-      if (isVisible) count++;
+      
+      // Store original domain name to prevent multiple wrapping
+      const originalDomain = domainLink.getAttribute('data-dpt-original') || domainLink.textContent?.trim() || '';
+      if (!domainLink.hasAttribute('data-dpt-original')) {
+          domainLink.setAttribute('data-dpt-original', originalDomain);
+      }
 
-      // Apply Heatmap
+      const statusText = statusCell?.querySelector('a')?.textContent?.trim() || statusCell?.textContent?.trim() || '';
+      const isVisible = filterDomain(originalDomain, statusText, { ...debouncedFilters, compiledRegex });
+      
+      // Use Data Attributes instead of direct style.display
+      if (isVisible) {
+          row.removeAttribute('data-dpt-filtered');
+          count++;
+      } else {
+          row.setAttribute('data-dpt-filtered', 'true');
+      }
+
+      // Apply Keyword Highlighting
+      if (isVisible && highlightRegex) {
+          domainLink.innerHTML = originalDomain.replace(highlightRegex, '<mark class="dpt-highlight">$1</mark>');
+      } else {
+          domainLink.textContent = originalDomain;
+      }
+
+      // Apply Heatmap via CSS Variables & Data Attributes
       const cells = row.querySelectorAll('td');
       cells.forEach(cell => {
+          // Clear previous sort highlight
+          cell.removeAttribute('data-dpt-sorted');
+
           if (!isHeatmapEnabled) {
+              cell.style.removeProperty('--dpt-heat-color');
+              cell.removeAttribute('data-dpt-heat');
               cell.style.backgroundColor = '';
               return;
           }
           const className = Array.from(cell.classList).find(c => c.startsWith('field_')) as string;
           if (className) {
               const color = getHeatColor(className, cell.textContent?.trim() || '');
-              cell.style.backgroundColor = color || '';
+              if (color) {
+                cell.style.setProperty('--dpt-heat-color', color);
+                cell.setAttribute('data-dpt-heat', 'true');
+              } else {
+                cell.style.removeProperty('--dpt-heat-color');
+                cell.removeAttribute('data-dpt-heat');
+                cell.style.backgroundColor = '';
+              }
+          } else {
+              cell.style.removeProperty('--dpt-heat-color');
+              cell.removeAttribute('data-dpt-heat');
+              cell.style.backgroundColor = '';
           }
       });
     });
 
     setVisibleCount(count);
-    if (sortConfig.column) rows = sortRows(rows, sortConfig.column, sortConfig.direction);
+    if (sortConfig.column) {
+        rows = sortRows(rows, sortConfig.column, sortConfig.direction);
+        rows.forEach(row => {
+            const cell = row.querySelector(`td.${sortConfig.column}`);
+            if (cell) cell.setAttribute('data-dpt-sorted', 'true');
+        });
+    }
     
     // Optimization: Only re-append rows if sorting is active OR if the DOM order is out of sync
     const firstRow = tbody.firstElementChild;
-    const shouldReorder = sortConfig.column || (rows.length > 0 && firstRow !== rows[0]);
+    const shouldReorder = sortConfig.column || (rows.length > 0 && firstRow !== rows[0]) || tableVersion > 0;
 
     if (shouldReorder) {
         const fragment = document.createDocumentFragment();
         rows.forEach(row => fragment.appendChild(row));
         tbody.appendChild(fragment);
     }
-  }, [filters, sortConfig, isHeatmapEnabled, tableVersion]);
+  }, [debouncedFilters, sortConfig, isHeatmapEnabled, tableVersion, compiledRegex, highlightRegex, isEnabled]);
 
   useEffect(() => {
     const styleId = 'domain-powertools-col-styles';
@@ -392,8 +835,54 @@ export default function Sidebar() {
       document.head.appendChild(styleTag);
     }
     const hiddenRules = hiddenColumns.map(c => `${TABLE_SELECTOR} th.${c.replace('field_', 'head_')}, ${TABLE_SELECTOR} td.${c} { display: none !important; }`).join('\n');
-    let highlightRule = sortConfig.column ? `${TABLE_SELECTOR} td.${sortConfig.column} { border-left: 2px solid rgba(148, 163, 184, 0.4) !important; border-right: 2px solid rgba(148, 163, 184, 0.4) !important; background-color: #e8e8e8; }` : '';
-    styleTag.textContent = hiddenRules + '\n' + highlightRule;
+    
+    // Core Filter & Heatmap Styles
+    const coreStyles = `
+      ${TABLE_SELECTOR} tr[data-dpt-filtered="true"] { display: none !important; }
+      ${TABLE_SELECTOR} td[data-dpt-heat="true"] { background-color: var(--dpt-heat-color) !important; transition: background-color 0.2s; }
+      ${TABLE_SELECTOR} td[data-dpt-sorted="true"] { 
+        border-left: 2px solid rgba(148, 163, 184, 0.4) !important; 
+        border-right: 2px solid rgba(148, 163, 184, 0.4) !important; 
+        background-color: rgba(148, 163, 184, 0.1) !important; 
+      }
+      .dpt-highlight {
+        background-color: rgba(20, 184, 166, 0.15);
+        color: #0f172a;
+        font-weight: 700;
+        padding: 0 1px;
+        border-radius: 2px;
+        border-bottom: 1.5px solid rgba(20, 184, 166, 0.5);
+      }
+    `;
+
+    // Layout Push Styles
+    const layoutStyles = `
+      html.dpt-enabled {
+        scroll-behavior: smooth !important;
+      }
+      body.dpt-enabled { 
+        margin-right: var(--dpt-sidebar-width) !important; 
+        transition: margin-right 300ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+      }
+      /* Ensure fixed elements on site like navigation bar are also pushed */
+      body.dpt-enabled #navigation { 
+        right: var(--dpt-sidebar-width) !important; 
+        left: auto !important; 
+        transition: right 300ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+      }
+      
+      /* Table Stabilization during AJAX swap */
+      body.dpt-loading ${TABLE_SELECTOR},
+      body.dpt-swapping ${TABLE_SELECTOR} {
+        opacity: 0.4 !important;
+        pointer-events: none;
+      }
+      ${TABLE_SELECTOR} {
+        transition: opacity 0.3s ease-in-out;
+      }
+    `;
+
+    styleTag.textContent = [hiddenRules, coreStyles, layoutStyles].join('\n');
   }, [hiddenColumns, sortConfig.column]);
 
   // --- Handlers ---
@@ -421,30 +910,6 @@ export default function Sidebar() {
     }
     setTldInput('');
   };
-
-  const allTldsToDisplay = useMemo(() => {
-    const activeTlds = filters.tldFilter.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-    const activeSet = new Set(activeTlds);
-    
-    // Start with detected ones
-    const combined = [...detectedTlds];
-    
-    // Add any active ones that aren't in detected
-    activeTlds.forEach(tld => {
-        if (!combined.find(d => d.tld === tld)) {
-            combined.push({ tld, count: 0 });
-        }
-    });
-
-    // Sort: Active first, then by count desc
-    return combined.sort((a, b) => {
-        const aActive = activeSet.has(a.tld);
-        const bActive = activeSet.has(b.tld);
-        if (aActive && !bActive) return -1;
-        if (!aActive && bActive) return 1;
-        return b.count - a.count;
-    });
-  }, [detectedTlds, filters.tldFilter]);
 
   const copyVisible = async () => {
     const domains: string[] = [];
@@ -592,10 +1057,21 @@ export default function Sidebar() {
     setIsColumnsExpanded(false);
   };
 
-  if (!isEnabled) return null;
+  if (!isEnabled || !hasTable) return null;
 
   return (
-    <div className={`fixed top-0 right-0 h-full bg-slate-900 text-slate-100 shadow-2xl z-[2147483647] border-l border-slate-700 font-sans transition-all duration-300 ease-in-out ${isCollapsed ? 'w-12' : 'w-80'}`}>
+    <div className="fixed inset-0 pointer-events-none z-[2147483647]">
+      <div className={`pointer-events-auto fixed top-0 right-0 h-full bg-slate-900 text-slate-100 shadow-2xl border-l border-slate-700 font-sans transition-all duration-300 ease-in-out ${isCollapsed ? 'w-12' : 'w-80'}`}>
+      {/* Top Loading Progress Bar */}
+      {isLoading && (
+        <div className="absolute top-0 left-0 w-full h-0.5 overflow-hidden z-[60] bg-teal-950/50">
+          <div 
+            className="h-full bg-teal-400 shadow-[0_0_8px_rgba(45,212,191,0.8)] transition-all duration-300 ease-out"
+            style={{ width: `${loadingProgress}%` }}
+          ></div>
+        </div>
+      )}
+      
       <div className={`flex flex-col h-full ${isCollapsed ? 'hidden' : 'flex'}`}>
         <div className="p-4 flex-shrink-0 bg-slate-900 z-10 border-b border-slate-700">
            <div className="flex justify-between items-center">
@@ -603,7 +1079,9 @@ export default function Sidebar() {
                 <Logo />
             </div>
                <div>
-                   <h2 className="text-lg font-bold tracking-tight"><span className="text-white">Domain</span> <span className="text-teal-400">Powertools</span></h2>
+                   <div className="flex items-center gap-2">
+                     <h2 className="text-lg font-bold tracking-tight"><span className="text-white">Domain</span> <span className="text-teal-400">Powertools</span></h2>
+                   </div>
                    <div className="text-xs text-slate-500">Version 1.0.0</div>
                </div>
                <div className="flex items-center">
@@ -846,6 +1324,31 @@ export default function Sidebar() {
                                 <div className="w-8 h-4 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-teal-500"></div>
                             </div>
                         </label>
+                        <label className="flex items-center justify-between cursor-pointer group" title="Navigate between pages instantly without a full page reload">
+                            <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">Instant Pagination</span>
+                            <div className="relative">
+                                <input type="checkbox" checked={isInstantNavEnabled} onChange={(e) => setIsInstantNavEnabled(e.target.checked)} className="sr-only peer"/>
+                                <div className="w-8 h-4 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-teal-500"></div>
+                            </div>
+                        </label>
+                        <label className="flex items-center justify-between cursor-pointer group" title="Show quick action shortcuts when hovering over domain names">
+                            <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">Quick Actions</span>
+                            <div className="relative">
+                                <input type="checkbox" checked={isQuickActionsEnabled} onChange={(e) => setIsQuickActionsEnabled(e.target.checked)} className="sr-only peer"/>
+                                <div className="w-8 h-4 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-teal-500"></div>
+                            </div>
+                        </label>
+                        <div className="space-y-1">
+                            <label className="text-xs text-slate-400">Highlight Keywords</label>
+                            <input 
+                                type="text" 
+                                value={filters.highlightKeywords} 
+                                onChange={(e) => updateFilter('highlightKeywords', e.target.value)} 
+                                className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-colors" 
+                                placeholder="e.g. tech, ai, shop"
+                                title="Enter keywords separated by commas to highlight them in teal within domain names."
+                            />
+                        </div>
                         <div className="space-y-1">
                             <label className="text-xs text-slate-400 flex items-center gap-1">
                                 Custom Pattern
@@ -980,6 +1483,67 @@ export default function Sidebar() {
         .sidebar-scroll::-webkit-scrollbar-thumb { background: rgb(51 65 85); border-radius: 3px; }
         .sidebar-scroll::-webkit-scrollbar-thumb:hover { background: rgb(71 85 105); }
       `}</style>
+      </div>
+
+      {/* Quick Actions Hover Menu */}
+      {isQuickActionsEnabled && hoveredData && (
+        <>
+          {/* Transparent Bridge to prevent menu from closing when moving mouse */}
+          <div 
+            className="dpt-quick-actions pointer-events-auto absolute z-[2147483647]"
+            style={{ 
+              top: hoveredData.rect.top - 10, 
+              left: hoveredData.rect.left,
+              width: hoveredData.rect.width,
+              height: 10
+            }}
+            onMouseEnter={() => { if (hideTimeout.current) clearTimeout(hideTimeout.current); }}
+          />
+          
+          {/* The Action Menu */}
+          <div 
+            className="dpt-quick-actions pointer-events-auto absolute z-[2147483648] flex items-center gap-1 p-1 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-150"
+            style={{ 
+              top: hoveredData.rect.top - 38, 
+              left: Math.max(10, hoveredData.rect.left + (hoveredData.rect.width / 2) - 100)
+            }}
+            onMouseEnter={() => { if (hideTimeout.current) clearTimeout(hideTimeout.current); }}
+            onMouseLeave={() => hideMenu()}
+          >
+          <button 
+            onClick={() => { 
+                navigator.clipboard.writeText(hoveredData.domain); 
+                setQuickCopySuccess(true);
+                setTimeout(() => setQuickCopySuccess(false), 2000);
+            }} 
+            className={`p-1.5 rounded transition-all cursor-pointer ${quickCopySuccess ? 'text-teal-400 bg-teal-400/10' : 'text-slate-300 hover:text-teal-400 hover:bg-slate-800'}`}
+            title="Copy Domain"
+          >
+            {quickCopySuccess ? (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/></svg>
+            ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            )}
+          </button>
+          <div className="w-px h-4 bg-slate-700 mx-0.5"></div>
+          <button onClick={() => openExternal('http://' + hoveredData.domain)} className="p-1.5 text-slate-300 hover:text-teal-400 hover:bg-slate-800 rounded transition-colors cursor-pointer" title="Open in New Tab">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+          </button>
+          <button onClick={() => openExternal(`https://web.archive.org/web/*/${hoveredData.domain}`)} className="p-1.5 text-slate-300 hover:text-teal-400 hover:bg-slate-800 rounded transition-colors cursor-pointer" title="Wayback Machine">
+             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </button>
+          <button onClick={() => openExternal(`https://www.google.com/search?q=${encodeURIComponent(hoveredData.domain)}`)} className="p-1.5 text-slate-300 hover:text-teal-400 hover:bg-slate-800 rounded transition-colors cursor-pointer" title="Google Search">
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12.48 10.92v3.28h7.84c-.24 1.84-.908 3.152-1.928 4.176-1.288 1.288-3.152 2.68-6.392 2.68-5.112 0-9.256-4.144-9.256-9.256s4.144-9.256 9.256-9.256c2.784 0 4.88 1.104 6.36 2.512l2.312-2.312c-1.928-1.84-4.52-3.184-8.672-3.184-7.44 0-13.44 6-13.44 13.44s6 13.44 13.44 13.44c4.016 0 7.032-1.32 9.4-3.792 2.432-2.432 3.168-5.832 3.168-8.592 0-.816-.064-1.584-.192-2.288h-11.412z"/></svg>
+          </button>
+          <button onClick={() => openExternal(`https://www.whois.com/whois/${hoveredData.domain}`)} className="p-1.5 text-slate-300 hover:text-teal-400 hover:bg-slate-800 rounded transition-colors cursor-pointer" title="Whois Lookup">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </button>
+          <button onClick={() => openExternal(`https://dnschecker.org/#A/${hoveredData.domain}`)} className="p-1.5 text-slate-300 hover:text-teal-400 hover:bg-slate-800 rounded transition-colors cursor-pointer" title="DNS Lookup">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
+          </button>
+        </div>
+        </>
+      )}
     </div>
   );
 }

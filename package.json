@@ -2,7 +2,7 @@
   "name": "domain-powertools",
   "description": "Enhances expireddomains.net with advanced filtering, sorting, heatmaps, and export tools to help find the perfect expired domain.",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "dev": "wxt",
