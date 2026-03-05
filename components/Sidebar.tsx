@@ -6,6 +6,8 @@ const TABLE_SELECTOR = '#listing table.base1';
 const DOMAIN_LINK_SELECTOR = 'td.field_domain a';
 const STATUS_CELL_SELECTOR = 'td.field_whois';
 
+const openExternal = (url: string) => window.open(url, '_blank');
+
 interface ColumnDef {
   label: string;
   className: string;
@@ -118,11 +120,44 @@ export default function Sidebar() {
   const [isHeatmapEnabled, setIsHeatmapEnabled] = useState(false);
   const [isPresetsEnabled, setIsPresetsEnabled] = useState(false);
   const [isInstantNavEnabled, setIsInstantNavEnabled] = useState(false);
+  const [isQuickActionsEnabled, setIsQuickActionsEnabled] = useState(false);
   const [tableVersion, setTableVersion] = useState(0);
   const [isEnabled, setIsEnabled] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [hasTable, setHasTable] = useState(false);
+
+  // --- Quick Actions Singleton State ---
+  const [hoveredData, setHoveredData] = useState<{ domain: string, rect: DOMRect } | null>(null);
+  const [quickCopySuccess, setQuickCopySuccess] = useState(false);
+  const hideTimeout = useRef<NodeJS.Timeout | null>(null);
+  const showTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  const clearTimeouts = () => {
+    if (hideTimeout.current) clearTimeout(hideTimeout.current);
+    if (showTimeout.current) clearTimeout(showTimeout.current);
+  };
+
+  const showMenu = (domain: string, rect: DOMRect) => {
+    clearTimeouts();
+    // Tiny delay to ensure we don't pop up while just passing through
+    showTimeout.current = setTimeout(() => {
+        setHoveredData({ domain, rect });
+    }, 80);
+  };
+
+  const hideMenu = (immediate = false) => {
+    clearTimeouts();
+    if (immediate) {
+        setHoveredData(null);
+        setQuickCopySuccess(false);
+    } else {
+        hideTimeout.current = setTimeout(() => {
+            setHoveredData(null);
+            setQuickCopySuccess(false);
+        }, 400); // Generous grace period to move from cell to menu
+    }
+  };
 
   // Check for table existence
   useEffect(() => {
@@ -134,6 +169,58 @@ export default function Sidebar() {
     const interval = setInterval(check, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Hover detection for Quick Actions (Shadow-piercing Singleton)
+  useEffect(() => {
+    if (!isEnabled || !isQuickActionsEnabled) {
+      hideMenu(true);
+      return;
+    }
+
+    const handleMouseOver = (e: MouseEvent) => {
+      const path = e.composedPath();
+      let cell: HTMLElement | null = null;
+      let isOverMenu = false;
+
+      for (const el of path) {
+        if (!(el instanceof HTMLElement)) continue;
+        if (el.classList.contains('field_domain')) {
+          cell = el;
+          break;
+        }
+        if (el.classList.contains('dpt-quick-actions')) {
+          isOverMenu = true;
+          break;
+        }
+      }
+
+      if (cell) {
+        const link = cell.querySelector('a');
+        if (link) {
+          const domain = link.getAttribute('data-dpt-original') || link.textContent?.trim() || '';
+          if (domain) {
+            // If it's the same domain, just keep it open
+            if (hoveredData?.domain === domain) {
+                if (hideTimeout.current) clearTimeout(hideTimeout.current);
+            } else {
+                showMenu(domain, cell.getBoundingClientRect());
+            }
+          }
+        }
+      } else if (!isOverMenu) {
+        hideMenu();
+      } else {
+        // Over menu, clear any pending hide
+        if (hideTimeout.current) clearTimeout(hideTimeout.current);
+      }
+    };
+
+    document.addEventListener('mouseover', handleMouseOver);
+    return () => {
+        document.removeEventListener('mouseover', handleMouseOver);
+        clearTimeouts();
+    };
+  }, [isEnabled, isQuickActionsEnabled, hoveredData?.domain]);
 
   // Debounce filters for performance
   const [debouncedFilters, setDebouncedFilters] = useState(filters);
@@ -486,6 +573,7 @@ export default function Sidebar() {
                 'dpt_heatmap',
                 'dpt_presets_enabled',
                 'dpt_instant_nav',
+                'dpt_quick_actions',
                 'dpt_exp_name',
                 'dpt_exp_tld',
                 'dpt_exp_adv',
@@ -510,7 +598,8 @@ export default function Sidebar() {
             if (res.dpt_sort_config) setSortConfig(res.dpt_sort_config);
             if (res.dpt_heatmap !== undefined) setIsHeatmapEnabled(res.dpt_heatmap);
             if (res.dpt_presets_enabled !== undefined) setIsPresetsEnabled(res.dpt_presets_enabled);
-            setIsInstantNavEnabled(res.dpt_instant_nav === true); // Default false
+            setIsInstantNavEnabled(res.dpt_instant_nav === true);
+            setIsQuickActionsEnabled(res.dpt_quick_actions === true); // Default false
             
             // Expansion States
             if (res.dpt_exp_name !== undefined) setIsNameExpanded(res.dpt_exp_name);
@@ -569,6 +658,7 @@ export default function Sidebar() {
             dpt_heatmap: isHeatmapEnabled,
             dpt_presets_enabled: isPresetsEnabled,
             dpt_instant_nav: isInstantNavEnabled,
+            dpt_quick_actions: isQuickActionsEnabled,
             dpt_exp_name: isNameExpanded,
             dpt_exp_tld: isTldExpanded,
             dpt_exp_adv: isAdvancedExpanded,
@@ -578,7 +668,7 @@ export default function Sidebar() {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [filters, presets, activePresetName, hiddenColumns, sortConfig, isHeatmapEnabled, isPresetsEnabled, isInstantNavEnabled, isNameExpanded, isTldExpanded, isAdvancedExpanded, isColumnsExpanded, isEnabled]);
+  }, [filters, presets, activePresetName, hiddenColumns, sortConfig, isHeatmapEnabled, isPresetsEnabled, isInstantNavEnabled, isQuickActionsEnabled, isNameExpanded, isTldExpanded, isAdvancedExpanded, isColumnsExpanded, isEnabled]);
 
   // --- DOM Detection (Mount & MutationObserver) ---
   useEffect(() => {
@@ -970,7 +1060,8 @@ export default function Sidebar() {
   if (!isEnabled || !hasTable) return null;
 
   return (
-    <div className={`fixed top-0 right-0 h-full bg-slate-900 text-slate-100 shadow-2xl z-[2147483647] border-l border-slate-700 font-sans transition-all duration-300 ease-in-out ${isCollapsed ? 'w-12' : 'w-80'}`}>
+    <div className="fixed inset-0 pointer-events-none z-[2147483647]">
+      <div className={`pointer-events-auto fixed top-0 right-0 h-full bg-slate-900 text-slate-100 shadow-2xl border-l border-slate-700 font-sans transition-all duration-300 ease-in-out ${isCollapsed ? 'w-12' : 'w-80'}`}>
       {/* Top Loading Progress Bar */}
       {isLoading && (
         <div className="absolute top-0 left-0 w-full h-0.5 overflow-hidden z-[60] bg-teal-950/50">
@@ -1240,6 +1331,13 @@ export default function Sidebar() {
                                 <div className="w-8 h-4 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-teal-500"></div>
                             </div>
                         </label>
+                        <label className="flex items-center justify-between cursor-pointer group" title="Show quick action shortcuts when hovering over domain names">
+                            <span className="text-xs text-slate-400 group-hover:text-slate-200 transition-colors">Quick Actions</span>
+                            <div className="relative">
+                                <input type="checkbox" checked={isQuickActionsEnabled} onChange={(e) => setIsQuickActionsEnabled(e.target.checked)} className="sr-only peer"/>
+                                <div className="w-8 h-4 bg-slate-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-teal-500"></div>
+                            </div>
+                        </label>
                         <div className="space-y-1">
                             <label className="text-xs text-slate-400">Highlight Keywords</label>
                             <input 
@@ -1385,6 +1483,67 @@ export default function Sidebar() {
         .sidebar-scroll::-webkit-scrollbar-thumb { background: rgb(51 65 85); border-radius: 3px; }
         .sidebar-scroll::-webkit-scrollbar-thumb:hover { background: rgb(71 85 105); }
       `}</style>
+      </div>
+
+      {/* Quick Actions Hover Menu */}
+      {isQuickActionsEnabled && hoveredData && (
+        <>
+          {/* Transparent Bridge to prevent menu from closing when moving mouse */}
+          <div 
+            className="dpt-quick-actions pointer-events-auto absolute z-[2147483647]"
+            style={{ 
+              top: hoveredData.rect.top - 10, 
+              left: hoveredData.rect.left,
+              width: hoveredData.rect.width,
+              height: 10
+            }}
+            onMouseEnter={() => { if (hideTimeout.current) clearTimeout(hideTimeout.current); }}
+          />
+          
+          {/* The Action Menu */}
+          <div 
+            className="dpt-quick-actions pointer-events-auto absolute z-[2147483648] flex items-center gap-1 p-1 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-150"
+            style={{ 
+              top: hoveredData.rect.top - 38, 
+              left: Math.max(10, hoveredData.rect.left + (hoveredData.rect.width / 2) - 100)
+            }}
+            onMouseEnter={() => { if (hideTimeout.current) clearTimeout(hideTimeout.current); }}
+            onMouseLeave={() => hideMenu()}
+          >
+          <button 
+            onClick={() => { 
+                navigator.clipboard.writeText(hoveredData.domain); 
+                setQuickCopySuccess(true);
+                setTimeout(() => setQuickCopySuccess(false), 2000);
+            }} 
+            className={`p-1.5 rounded transition-all cursor-pointer ${quickCopySuccess ? 'text-teal-400 bg-teal-400/10' : 'text-slate-300 hover:text-teal-400 hover:bg-slate-800'}`}
+            title="Copy Domain"
+          >
+            {quickCopySuccess ? (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/></svg>
+            ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            )}
+          </button>
+          <div className="w-px h-4 bg-slate-700 mx-0.5"></div>
+          <button onClick={() => openExternal('http://' + hoveredData.domain)} className="p-1.5 text-slate-300 hover:text-teal-400 hover:bg-slate-800 rounded transition-colors cursor-pointer" title="Open in New Tab">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+          </button>
+          <button onClick={() => openExternal(`https://web.archive.org/web/*/${hoveredData.domain}`)} className="p-1.5 text-slate-300 hover:text-teal-400 hover:bg-slate-800 rounded transition-colors cursor-pointer" title="Wayback Machine">
+             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </button>
+          <button onClick={() => openExternal(`https://www.google.com/search?q=${encodeURIComponent(hoveredData.domain)}`)} className="p-1.5 text-slate-300 hover:text-teal-400 hover:bg-slate-800 rounded transition-colors cursor-pointer" title="Google Search">
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12.48 10.92v3.28h7.84c-.24 1.84-.908 3.152-1.928 4.176-1.288 1.288-3.152 2.68-6.392 2.68-5.112 0-9.256-4.144-9.256-9.256s4.144-9.256 9.256-9.256c2.784 0 4.88 1.104 6.36 2.512l2.312-2.312c-1.928-1.84-4.52-3.184-8.672-3.184-7.44 0-13.44 6-13.44 13.44s6 13.44 13.44 13.44c4.016 0 7.032-1.32 9.4-3.792 2.432-2.432 3.168-5.832 3.168-8.592 0-.816-.064-1.584-.192-2.288h-11.412z"/></svg>
+          </button>
+          <button onClick={() => openExternal(`https://www.whois.com/whois/${hoveredData.domain}`)} className="p-1.5 text-slate-300 hover:text-teal-400 hover:bg-slate-800 rounded transition-colors cursor-pointer" title="Whois Lookup">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </button>
+          <button onClick={() => openExternal(`https://dnschecker.org/#A/${hoveredData.domain}`)} className="p-1.5 text-slate-300 hover:text-teal-400 hover:bg-slate-800 rounded transition-colors cursor-pointer" title="DNS Lookup">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
+          </button>
+        </div>
+        </>
+      )}
     </div>
   );
 }
