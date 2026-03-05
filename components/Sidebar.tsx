@@ -707,7 +707,7 @@ export default function Sidebar() {
 
   // --- Layout & Table Logic ---
   useEffect(() => {
-    if (!isEnabled) {
+    if (!isEnabled || !hasTable) {
         document.documentElement.classList.remove('dpt-enabled');
         document.body.classList.remove('dpt-enabled');
         document.body.style.removeProperty('--dpt-sidebar-width');
@@ -724,7 +724,7 @@ export default function Sidebar() {
         document.body.classList.remove('dpt-enabled');
         document.body.style.removeProperty('--dpt-sidebar-width');
     };
-  }, [isCollapsed, isEnabled]);
+  }, [isCollapsed, isEnabled, hasTable]);
 
   useEffect(() => {
     const tbody = document.querySelector(`${TABLE_SELECTOR} tbody`);
